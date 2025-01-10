@@ -1,5 +1,5 @@
 // app/routes/_index.tsx
-import { useState } from 'react'
+import { Key, useState } from 'react'
 import type { ActionFunction, LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
 import { Form, useActionData, useLoaderData } from '@remix-run/react'
@@ -282,11 +282,13 @@ export const action: ActionFunction = async ({ request }) => {
 // AssetDisplay Component
 function AssetDisplay({
   title,
-  preview,
+  originalPreview,
+  convertedPreview,
   code,
 }: {
   title: string
-  preview: React.ReactNode
+  originalPreview: string
+  convertedPreview: React.ReactNode
   code: string
 }) {
   const [showCode, setShowCode] = useState(false)
@@ -305,11 +307,10 @@ function AssetDisplay({
         <div className='space-x-2'>
           <Button
             variant='outline'
-            className='text-white'
             size='sm'
             onClick={() => setShowCode(!showCode)}
           >
-            <Code className='w-4 h-4 mr-2 text-white' />
+            <Code className='w-4 h-4 mr-2' />
             {showCode ? 'Hide Code' : 'Show Code'}
           </Button>
           {showCode && (
@@ -325,8 +326,21 @@ function AssetDisplay({
         </div>
       </div>
 
-      <div className='border rounded p-6 bg-white dark:bg-gray-800'>
-        {preview}
+      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+        <div>
+          <div className='text-sm text-gray-500 mb-2'>Original</div>
+          <div className='border rounded p-6 bg-white dark:bg-gray-800'>
+            <div dangerouslySetInnerHTML={{ __html: originalPreview }} />
+          </div>
+        </div>
+        <div>
+          <div className='text-sm text-gray-500 mb-2'>
+            Converted (shadcn/ui)
+          </div>
+          <div className='border rounded p-6 bg-white dark:bg-gray-800'>
+            {convertedPreview}
+          </div>
+        </div>
       </div>
 
       {showCode && (
@@ -346,7 +360,7 @@ export default function Index() {
 
   return (
     <div className='container mx-auto p-6'>
-      <Card className='max-w-4xl mx-auto'>
+      <Card className='max-w-6xl mx-auto'>
         <CardHeader>
           <CardTitle>Website Asset Extractor</CardTitle>
         </CardHeader>
@@ -378,12 +392,13 @@ export default function Index() {
               </TabsList>
 
               <TabsContent value='buttons' className='space-y-4'>
-                <div className='grid grid-cols-2 gap-4'>
+                <div className='grid grid-cols-1 gap-4'>
                   {actionData.assets.buttons.map((button, index) => (
                     <AssetDisplay
                       key={index}
                       title={`${button.type} Button`}
-                      preview={
+                      originalPreview={button.code}
+                      convertedPreview={
                         <Button
                           variant={button.variant}
                           size={button.size}
@@ -403,10 +418,15 @@ export default function Index() {
                   <AssetDisplay
                     key={index}
                     title={template.name}
-                    preview={
-                      <div
-                        dangerouslySetInnerHTML={{ __html: template.component }}
-                      />
+                    originalPreview={template.component}
+                    convertedPreview={
+                      <div className='w-full'>
+                        <div
+                          dangerouslySetInnerHTML={{
+                            __html: template.component,
+                          }}
+                        />
+                      </div>
                     }
                     code={template.code}
                   />
