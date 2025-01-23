@@ -1,5 +1,4 @@
-// app/routes/_index.tsx
-import { Key, useState } from 'react'
+import React, { useState } from 'react'
 import type { ActionFunction, LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
 import { Form, useActionData, useLoaderData } from '@remix-run/react'
@@ -10,6 +9,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Code, Copy, Check } from 'lucide-react'
 import * as cheerio from 'cheerio'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { materialDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 
 interface ExtractedButton {
   type: string
@@ -344,14 +345,24 @@ function AssetDisplay({
       </div>
 
       {showCode && (
-        <pre className='bg-gray-100 dark:bg-gray-900 p-4 rounded overflow-x-auto'>
-          <code>{code}</code>
-        </pre>
+        <div className='w-full overflow-x-auto'>
+          <SyntaxHighlighter
+            language='html'
+            style={materialDark}
+            className='rounded min-w-[800px]'
+            customStyle={{
+              margin: 0,
+              width: '100%',
+              maxWidth: 'none',
+            }}
+          >
+            {code}
+          </SyntaxHighlighter>
+        </div>
       )}
     </div>
   )
 }
-
 // Main Component
 export default function Index() {
   const [url, setUrl] = useState('')
@@ -362,7 +373,7 @@ export default function Index() {
     <div className='container mx-auto p-6'>
       <Card className='max-w-6xl mx-auto'>
         <CardHeader>
-          <CardTitle>Website Asset Extractor</CardTitle>
+          <CardTitle>FrontendXplorer</CardTitle>
         </CardHeader>
         <CardContent>
           <Form method='post' className='space-y-4'>

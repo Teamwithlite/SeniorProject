@@ -1,4 +1,4 @@
-import type { Config } from 'tailwindcss'
+import { Config } from 'tailwindcss'
 
 const config = {
   darkMode: ['class'],
@@ -14,62 +14,103 @@ const config = {
       padding: '2rem',
       screens: {
         sm: '576px',
-        // => @media (min-width: 576px) { ... }
-
         md: '960px',
-        // => @media (min-width: 960px) { ... }
-
         lg: '1440px',
-        // => @media (min-width: 1440px) { ... }
       },
     },
     extend: {
       colors: {
-        blue: '#1fb6ff',
-        purple: '#7e5bef',
-        pink: '#ff49db',
-        orange: '#ff7849',
-        green: '#13ce66',
-        yellow: '#ffc82c',
-        'gray-dark': '#273444',
-        timberwolf: '#D4D2D5',
-        silver: '#bfafa6',
-        beaver: '#AA968A',
-        dirtgray: '#EBD2B4',
-        gray: '#8492a6',
-        'gray-light': '#d3dce6',
-        border: '#EBD2B4',
-        input: '#EBD2B4',
-        ring: 'hsl(var(--ring))',
-        background: 'black',
-        foreground: '#EBD2B4',
+        // New color palette
+        nyanza: {
+          DEFAULT: '#d6f6dd',
+          100: '#114b1d',
+          200: '#21973b',
+          300: '#3fd55f',
+          400: '#8ae59e',
+          500: '#d6f6dd',
+          600: '#def8e3',
+          700: '#e6f9ea',
+          800: '#eefbf1',
+          900: '#f7fdf8',
+        },
+        periwinkle: {
+          DEFAULT: '#dac4f7',
+          100: '#280b4e',
+          200: '#50159c',
+          300: '#7928e2',
+          400: '#aa77ec',
+          500: '#dac4f7',
+          600: '#e2d0f9',
+          700: '#e9dcfa',
+          800: '#f0e8fc',
+          900: '#f8f3fd',
+        },
+        salmon_pink: {
+          DEFAULT: '#f4989c',
+          100: '#48080b',
+          200: '#900f16',
+          300: '#d81720',
+          400: '#ed5159',
+          500: '#f4989c',
+          600: '#f6aeb1',
+          700: '#f9c2c5',
+          800: '#fbd6d8',
+          900: '#fdebec',
+        },
+        dun: {
+          DEFAULT: '#ebd2b4',
+          100: '#412c11',
+          200: '#835723',
+          300: '#c48334',
+          400: '#d9aa71',
+          500: '#ebd2b4',
+          600: '#efdac2',
+          700: '#f3e4d1',
+          800: '#f7ede0',
+          900: '#fbf6f0',
+        },
+
+        // Theme structure
+        background: '#d6f6dd', // nyanza as default background
+        foreground: '#280b4e', // periwinkle-100 for contrast
+
         primary: {
-          DEFAULT: '#EBD2B4',
-          foreground: 'hsl(var(--primary-foreground))',
+          DEFAULT: '#dac4f7', // periwinkle
+          foreground: '#f7fdf8', // nyanza-900
         },
+
         secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
+          DEFAULT: '#f4989c', // salmon_pink
+          foreground: '#280b4e', // periwinkle-100
         },
-        destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
-        },
-        muted: {
-          DEFAULT: 'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))',
-        },
+
         accent: {
-          DEFAULT: '#ECEBE4',
-          foreground: 'hsl(var(--accent-foreground))',
+          DEFAULT: '#ebd2b4', // dun
+          foreground: '#114b1d', // nyanza-100
         },
-        popover: {
-          DEFAULT: 'hsl(var(--popover))',
-          foreground: 'hsl(var(--popover-foreground))',
+
+        muted: {
+          DEFAULT: '#e6f9ea', // nyanza-700
+          foreground: '#50159c', // periwinkle-200
         },
+
         card: {
-          DEFAULT: '#bfafa6',
-          foreground: 'hsl(var(--card-foreground))',
+          DEFAULT: '#f7fdf8', // nyanza-900
+          foreground: '#280b4e', // periwinkle-100
+        },
+
+        popover: {
+          DEFAULT: '#f7fdf8', // nyanza-900
+          foreground: '#280b4e', // periwinkle-100
+        },
+
+        border: '#8ae59e', // nyanza-400
+        input: '#e9dcfa', // periwinkle-700
+        ring: '#f6aeb1', // salmon_pink-600
+
+        destructive: {
+          DEFAULT: '#900f16', // salmon_pink-200
+          foreground: '#fdebec', // salmon_pink-900
         },
       },
       borderRadius: {
