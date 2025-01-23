@@ -345,7 +345,7 @@ function AssetDisplay({
       </div>
 
       {showCode && (
-        <div className='w-full overflow-x-auto'>
+        <div className='w-full '>
           <SyntaxHighlighter
             language='html'
             style={materialDark}
