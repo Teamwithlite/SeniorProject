@@ -11,6 +11,7 @@ import { Code, Copy, Check } from 'lucide-react'
 import * as cheerio from 'cheerio'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { materialDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
+import LogoImage from '@/components/ui/Frontend Logo.png'
 
 interface ExtractedButton {
   type: string
@@ -373,6 +374,11 @@ export default function Index() {
     <div className='container mx-auto p-6'>
       <Card className='max-w-6xl mx-auto'>
         <CardHeader>
+        <img 
+            src={LogoImage} 
+            alt="FrontendXplorer Logo" 
+            className='w-12 h-12'
+          />
           <CardTitle>FrontendXplorer</CardTitle>
         </CardHeader>
         <CardContent>
