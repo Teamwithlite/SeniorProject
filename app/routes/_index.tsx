@@ -1,76 +1,176 @@
+// app/routes/_index.tsx
 import React, { useState } from 'react';
 import type { ActionFunction, LoaderFunction } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { Form, useFetcher } from '@remix-run/react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Code, Copy, Check } from 'lucide-react';
 
-// Loader Function
+// Import UI components
+import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card';
+import { Alert, AlertDescription } from '~/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
+
+// Import icons
+import { Code, Copy, Check, Eye, EyeOff } from 'lucide-react';
+
+// Import our types and utilities
+import type { ExtractedComponent } from '~/types';
+import { cn } from '~/lib/utils';
+
+// Loader function provides initial state
 export const loader: LoaderFunction = async () => {
   return json({
     initialMessage: 'Enter a URL to extract UI components',
   });
 };
 
-// Action Function
-export const action: ActionFunction = async ({ request }) => {
-  const formData = await request.formData();
-  const url = formData.get('url') as string;
-
-  if (!url) {
-    return json({ success: false, error: 'Please provide a valid URL' });
+// Component to preview extracted components
+function ComponentPreview({ component }: { component: ExtractedComponent }) {
+  // Convert the extracted styles to Tailwind classes
+  const tailwindClasses = component.metadata.styles.join(' ');
+  
+  // Handle different component types
+  switch (component.type) {
+    case 'button':
+      return (
+        <Button
+          variant={component.metadata.variant}
+          size={component.metadata.size}
+          className={tailwindClasses}
+        >
+          {component.metadata.content}
+        </Button>
+      );
+    case 'hero':
+    case 'navigation':
+      return (
+        <div className="relative w-full min-h-[200px] border-2 border-dashed rounded-lg p-4">
+          <div 
+            className={cn("w-full h-full", tailwindClasses)}
+            dangerouslySetInnerHTML={{ __html: component.html }} 
+          />
+        </div>
+      );
+    default:
+      return (
+        <div 
+          className={cn("relative", tailwindClasses)}
+          dangerouslySetInnerHTML={{ __html: component.html }} 
+        />
+      );
   }
+}
 
-  try {
-    const response = await fetch(`${process.env.BASE_URL}/extract`, {
-      method: 'POST',
-      body: JSON.stringify({ url }),
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    const data = await response.json();
-    return json(data);
-  } catch (error) {
-    return json({
-      success: false,
-      error: 'Failed to extract UI components from the provided URL: ' + (error as Error).message,
-    });
-  }
-};
-
-// UI Component Display
-function UIComponent({ title, preview, code }: { title: string; preview: string; code: string }) {
+// Component to display individual extracted components
+function UIComponent({ component }: { component: ExtractedComponent }) {
+  const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
   const [copied, setCopied] = useState(false);
 
-  const copyToClipboard = async () => {
-    await navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
-    <div className="border rounded-lg p-4 space-y-4">
-      <h3 className="font-medium">{title}</h3>
-      <div className="border rounded p-4 bg-white dark:bg-gray-800">
-        <div dangerouslySetInnerHTML={{ __html: preview }} />
-      </div>
-      <Button variant="outline" size="sm" onClick={copyToClipboard}>
-        {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-        {copied ? 'Copied!' : 'Copy Code'}
-      </Button>
-      <pre className="bg-gray-100 p-2 rounded text-sm overflow-x-auto">{code}</pre>
-    </div>
+    <Card className="w-full overflow-hidden border-2">
+      <CardHeader className="bg-gray-50 dark:bg-gray-800">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg font-medium">
+              {component.name}
+            </CardTitle>
+            <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <span className="capitalize">{component.type}</span>
+              <span>•</span>
+              <span>Accessibility: {component.metadata.accessibility.score}%</span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode(viewMode === 'preview' ? 'code' : 'preview')}
+            >
+              {viewMode === 'preview' ? (
+                <>
+                  <Code className="w-4 h-4 mr-2" />
+                  View Code
+                </>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Preview
+                </>
+              )}
+            </Button>
+            {viewMode === 'code' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(component.code);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copy
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-6">
+        {viewMode === 'preview' ? (
+          <div className="rounded-lg border-2 border-dashed p-6">
+            <ComponentPreview component={component} />
+          </div>
+        ) : (
+          <pre className="rounded-lg bg-gray-900 p-4 overflow-x-auto">
+            <code className="text-sm text-gray-100">{component.code}</code>
+          </pre>
+        )}
+
+        {component.metadata.accessibility.issues.length > 0 && (
+          <Alert className="mt-4">
+            <AlertDescription>
+              <div className="font-medium">Accessibility Issues:</div>
+              <ul className="list-disc pl-4 mt-2">
+                {component.metadata.accessibility.issues.map((issue, idx) => (
+                  <li key={idx}>{issue}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
-// Main Component
+// Main component
 export default function Index() {
   const [url, setUrl] = useState('');
   const fetcher = useFetcher();
   const actionData = fetcher.data;
+
+  const handleSubmit = () => {
+    if (!url.trim()) return;
+
+    const formData = new FormData();
+    formData.append('url', url.trim());
+
+    fetcher.submit(formData, {
+      method: 'post',
+      action: '/extract'
+    });
+  };
 
   return (
     <div className="container mx-auto p-6">
@@ -79,41 +179,68 @@ export default function Index() {
           <CardTitle>FrontendXplorer - Extract UI Components</CardTitle>
         </CardHeader>
         <CardContent>
-          <Form method="post" action="/extract" className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                name="url"
-                placeholder="Enter a URL to extract UI components"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className="flex-1"
-                required
-              />
-              <Button
-                type="button"
-                onClick={() => {
-                  const formData = new FormData();
-                  formData.append('url', url);
-                  fetcher.submit(formData, { method: 'post', action: '/extract' });
-                }}
-                disabled={fetcher.state === 'submitting'}
-              >
-                {fetcher.state === 'submitting' ? 'Extracting...' : 'Extract Components'}
-              </Button>
+          <div className="flex gap-2">
+            <Input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Enter a URL to extract UI components"
+              className="flex-1"
+              required
+            />
+            <Button
+              onClick={handleSubmit}
+              disabled={fetcher.state === 'submitting'}
+            >
+              {fetcher.state === 'submitting' ? 'Extracting...' : 'Extract Components'}
+            </Button>
+          </div>
+
+          {fetcher.state === 'loading' && (
+            <div className="mt-4 text-center">
+              <p className="text-gray-500">Analyzing webpage and extracting components...</p>
             </div>
-          </Form>
+          )}
 
-          {/* Loading State */}
-          {fetcher.state === 'loading' && <p className="mt-4 text-gray-500">Extracting UI components...</p>}
+          {actionData?.success ? (
+            <Tabs defaultValue="all" className="mt-6">
+              <TabsList>
+                <TabsTrigger value="all">
+                  All Components ({actionData.components.length})
+                </TabsTrigger>
+                {Object.entries(actionData.components.reduce((acc, component) => {
+                  if (!acc[component.type]) acc[component.type] = [];
+                  acc[component.type].push(component);
+                  return acc;
+                }, {} as Record<string, ExtractedComponent[]>)).map(([type, components]) => (
+                  <TabsTrigger key={type} value={type}>
+                    {type.charAt(0).toUpperCase() + type.slice(1)} ({components.length})
+                  </TabsTrigger>
+                ))}
+              </TabsList>
 
-          {/* Success: Show Extracted Components */}
-          {actionData?.success && actionData.components ? (
-            <div className="mt-6 space-y-4">
-              {actionData.components.map((component: any, index: number) => (
-                <UIComponent key={index} title={component.name} preview={component.html} code={component.code} />
+              <TabsContent value="all">
+                <div className="grid grid-cols-1 gap-6">
+                  {actionData.components.map((component, index) => (
+                    <UIComponent key={index} component={component} />
+                  ))}
+                </div>
+              </TabsContent>
+
+              {Object.entries(actionData.components.reduce((acc, component) => {
+                if (!acc[component.type]) acc[component.type] = [];
+                acc[component.type].push(component);
+                return acc;
+              }, {} as Record<string, ExtractedComponent[]>)).map(([type, components]) => (
+                <TabsContent key={type} value={type}>
+                  <div className="grid grid-cols-1 gap-6">
+                    {components.map((component, index) => (
+                      <UIComponent key={index} component={component} />
+                    ))}
+                  </div>
+                </TabsContent>
               ))}
-            </div>
+            </Tabs>
           ) : (
             actionData?.success === false && (
               <Alert className="mt-4">
