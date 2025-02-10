@@ -1,8 +1,15 @@
 import { vitePlugin as remix } from '@remix-run/dev';
 import { defineConfig } from 'vite';
+import path from 'path';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './app'), // Alias for `@`
+      '~': path.resolve(__dirname, './app')  // Alias for `~`
+    }
+  },
   plugins: [
     remix({
       future: {
@@ -11,6 +18,6 @@ export default defineConfig({
         v3_throwAbortReason: true,
       },
     }),
-    tsconfigPaths(),
+    tsconfigPaths(), // Keeps path resolution aligned with tsconfig.json
   ],
 });
