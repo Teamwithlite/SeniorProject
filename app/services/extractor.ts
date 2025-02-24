@@ -1,136 +1,163 @@
-// app/services/extractor.ts
-import puppeteer from 'puppeteer';
-import type { ExtractedComponent, ComponentMetadata } from '~/types';
+import puppeteer from 'puppeteer'
+import type { ExtractedComponent } from '~/types'
 
-// Helper function to clean HTML by removing extra whitespace and comments
-function cleanHTML(html: string): string {
+/**
+ * Remove unnecessary scripts and inline styles.
+ */
+const cleanHTML = (html: string): string => {
   return html
-    .replace(/(\r\n|\n|\r)/gm, '')
-    .replace(/\s+/g, ' ')
-    .replace(/<!--.*?-->/g, '')
-    .trim();
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/\sstyle="[^"]*"/gi, '')
+    .replace(/class="[^"]*"/gi, (match) => {
+      const classes = match.match(/class="([^"]*)"/)?.[1] || ''
+      const filtered = classes
+        .split(' ')
+        .filter((cls) => !cls.startsWith(':') && !cls.startsWith('w-'))
+        .join(' ')
+      return filtered ? `class="${filtered}"` : ''
+    })
 }
 
-// Main extraction function
-export async function extractWebsite(url: string) {
-  // Validate URL format
-  try {
-    new URL(url);
-  } catch {
-    throw new Error('Invalid URL format. Please provide a complete URL starting with http:// or https://');
+const COMPONENT_SELECTORS: Record<string, string> = {
+  buttons: 'button, .btn, [role="button"]',
+  navigation: 'nav, [role="navigation"]',
+  cards: '.card, [class*="card"]',
+  forms: 'form, .form',
+  headers: 'header, .header',
+  footers: 'footer, .footer',
+  hero: '[class*="hero"]',
+  modals: '[role="dialog"], .modal',
+}
+
+/**
+ * Extract UI components from a given URL using Puppeteer.
+ * Returns a list of components, each with its raw HTML, a cleaned version,
+ * computed styles, a screenshot, and additional metadata.
+ */
+export async function extractWebsite(
+  url: string
+): Promise<{ components: ExtractedComponent[] }> {
+  if (!url.startsWith('http')) {
+    throw new Error('Invalid URL format. Must start with http or https.')
   }
 
-  // Launch a headless browser
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu',
+      '--window-size=1920x1080',
+    ],
+  })
 
   try {
-    // Create a new page and set viewport
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1920, height: 1080 });
-    
-    // Navigate to the URL and wait for page load
-    await page.goto(url, { 
-      waitUntil: 'networkidle0', 
-      timeout: 30000 
-    });
+    const page = await browser.newPage()
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    )
+    await page.setViewport({
+      width: 1920,
+      height: 1080,
+      deviceScaleFactor: 1,
+    })
 
-    // Extract components using browser context
-    const components = await page.evaluate(() => {
-      function determineComponentType(element: Element): string | null {
-        // Navigation detection
-        if (element.tagName === 'NAV' || 
-            element.classList.contains('nav') || 
-            element.classList.contains('navbar')) {
-          return 'navigation';
+    await page.goto(url, {
+      waitUntil: 'networkidle0',
+      timeout: 30000,
+    })
+
+    const results: ExtractedComponent[] = []
+
+    // Loop through each type of component
+    for (const [type, selector] of Object.entries(COMPONENT_SELECTORS)) {
+      const elementHandles = await page.$$(selector)
+
+      for (const element of elementHandles) {
+        const rect = await element.boundingBox()
+        if (!rect || rect.width < 1 || rect.height < 1) {
+          continue // skip invisible elements
         }
 
-        // Hero section detection
-        if (element.querySelector('h1, h2') && 
-            element.querySelector('p') && 
-            (element.querySelector('button') || element.querySelector('a.button'))) {
-          return 'hero';
+        // Capture a screenshot of the element as a base64 string
+        let screenshot = ''
+        try {
+          const screenshotBuffer = await element.screenshot({
+            encoding: 'base64',
+          })
+          screenshot = `data:image/png;base64,${screenshotBuffer}`
+        } catch (err) {
+          console.error('Screenshot failed:', err)
         }
 
-        // Button detection
-        if (element.tagName === 'BUTTON' || 
-            element.getAttribute('role') === 'button' || 
-            (element.tagName === 'A' && element.classList.contains('button'))) {
-          return 'button';
-        }
+        // Get the outer HTML
+        const html = await page.evaluate((el) => el.outerHTML, element)
 
-        // Form detection
-        if (element.tagName === 'FORM' || element.querySelector('form')) {
-          return 'form';
-        }
+        // Extract computed styles
+        const styles = await page.evaluate((el) => {
+          const computed = window.getComputedStyle(el)
+          return {
+            backgroundColor: computed.backgroundColor,
+            color: computed.color,
+            padding: computed.padding,
+            margin: computed.margin,
+            borderRadius: computed.borderRadius,
+            fontSize: computed.fontSize,
+            display: computed.display,
+            flexDirection: computed.flexDirection,
+            alignItems: computed.alignItems,
+            justifyContent: computed.justifyContent,
+            width: computed.width,
+            height: computed.height,
+          }
+        }, element)
 
-        return null;
-      }
+        // Get text content to create a descriptive label
+        const textContent = await page.evaluate(
+          (el) => el.textContent?.trim() || '',
+          element
+        )
+        const displayName = textContent
+          ? `${type.charAt(0).toUpperCase() + type.slice(1)}: ${textContent.slice(
+              0,
+              25
+            )}`
+          : `${type.charAt(0).toUpperCase() + type.slice(1)} Component`
 
-      // Process each element on the page
-      const results: any[] = [];
-      const processedElements = new Set();
-
-      document.querySelectorAll('*').forEach((element) => {
-        if (processedElements.has(element)) return;
-
-        const type = determineComponentType(element);
-        if (!type) return;
-
-        // Get computed styles
-        const styles = window.getComputedStyle(element);
-        const tailwindClasses = [];
-
-        // Convert CSS properties to Tailwind classes
-        if (styles.display === 'flex') tailwindClasses.push('flex');
-        if (styles.alignItems === 'center') tailwindClasses.push('items-center');
-        if (styles.justifyContent === 'center') tailwindClasses.push('justify-center');
-        // Add more style conversions as needed
-
-        // Check accessibility
-        const accessibility = {
-          score: 100,
-          issues: [] as string[]
-        };
-
-        if (type === 'button' && !element.getAttribute('aria-label')) {
-          accessibility.score -= 10;
-          accessibility.issues.push('Missing aria-label on button');
-        }
-
-        // Add component to results
         results.push({
           type,
-          name: `${type.charAt(0).toUpperCase() + type.slice(1)} Component`,
-          html: element.outerHTML,
-          code: element.outerHTML,
+          name: displayName,
+          html,
+          screenshot,
+          styles,
           metadata: {
-            styles: tailwindClasses,
-            accessibility,
-            variant: type === 'button' ? 'default' : undefined,
-            size: type === 'button' ? 'default' : undefined,
-            content: element.textContent?.trim()
-          }
-        });
+            tagName: await page.evaluate((el) => el.tagName.toLowerCase(), element),
+            classes: await page.evaluate((el) => Array.from(el.classList), element),
+            dimensions: {
+              width: rect.width,
+              height: rect.height,
+            },
+          },
+        })
+      }
+    }
 
-        processedElements.add(element);
-      });
+    const cleanedComponents = results.map((component) => ({
+      ...component,
+      cleanHtml: cleanHTML(component.html),
+    }))
 
-      return results;
-    });
-
-    await browser.close();
-    
-    // Filter and return results
-    return { 
-      components: components
-        .filter(c => c.html.length > 50)
-        .slice(0, 10)
-    };
+    await browser.close()
+    return { components: cleanedComponents }
   } catch (error) {
-    await browser.close();
-    throw new Error(`Failed to extract UI components: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    await browser.close()
+    console.error('Extraction error:', error)
+    throw new Error(
+      `Failed to extract UI components: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`
+    )
   }
 }
