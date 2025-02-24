@@ -162,7 +162,9 @@ function ComponentPreview({ component }: ComponentPreviewProps) {
 const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
   components = [],
 }) => {
-  const [selectedComponent, setSelectedComponent] = useState<string>('')
+  const [selectedComponent, setSelectedComponent] = useState<string>(
+    components[0]?.name || '',
+  )
   const [customStyles, setCustomStyles] = useState({
     width: '100',
     padding: '16',
@@ -170,15 +172,13 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
     borderRadius: '4',
   })
   const [modifiedHtml, setModifiedHtml] = useState('')
+  const [showCode, setShowCode] = useState(false)
 
   const component = components.find((c) => c.name === selectedComponent)
 
   const updateStyle = (property: string, value: string) => {
     setCustomStyles((prev) => {
-      const newStyles = {
-        ...prev,
-        [property]: value,
-      }
+      const newStyles = { ...prev, [property]: value }
       updateModifiedHtml(newStyles)
       return newStyles
     })
@@ -217,14 +217,13 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
     <Card className='mt-8'>
       <CardHeader>
         <CardTitle className='flex items-center gap-2'>
-          <PlayCircle className='h-5 w-5' />
-          Asset Playground
+          <PlayCircle className='h-5 w-5' /> Asset Playground
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className='mb-4'>
           <Select
-            value={selectedComponent || components[0]?.name}
+            value={selectedComponent}
             onValueChange={setSelectedComponent}
           >
             <SelectTrigger>
@@ -259,31 +258,10 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
               >
                 <div
                   dangerouslySetInnerHTML={{
-                    __html: component.cleanHtml || component.html,
+                    __html:
+                      modifiedHtml || component.cleanHtml || component.html,
                   }}
                 />
-              </div>
-            )}
-          </div>
-
-          {/* Code Section */}
-          <div className='space-y-4'>
-            <div className='flex items-center gap-2'>
-              <Code className='h-4 w-4' />
-              <h3 className='text-lg font-semibold'>Code</h3>
-            </div>
-            {component && (
-              <div className='h-[400px] overflow-auto rounded-lg border'>
-                <SyntaxHighlighter
-                  language='markup'
-                  style={tomorrow}
-                  customStyle={{
-                    margin: 0,
-                    height: '100%',
-                  }}
-                >
-                  {modifiedHtml || component.cleanHtml || component.html}
-                </SyntaxHighlighter>
               </div>
             )}
           </div>
@@ -307,7 +285,6 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
                 className='mt-2'
               />
             </div>
-
             <div>
               <Label>Padding (px)</Label>
               <Slider
@@ -321,7 +298,6 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
                 className='mt-2'
               />
             </div>
-
             <div>
               <Label>Border Radius (px)</Label>
               <Slider
@@ -335,7 +311,6 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
                 className='mt-2'
               />
             </div>
-
             <div>
               <Label>Background Color</Label>
               <Input
@@ -347,6 +322,31 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
             </div>
           </div>
         </div>
+
+        {/* Toggle Code Section */}
+        <div className='mt-4'>
+          <Button onClick={() => setShowCode(!showCode)}>
+            {showCode ? 'Hide Code' : 'Show Code'}
+          </Button>
+        </div>
+
+        {showCode && (
+          <div className='mt-4 space-y-4'>
+            <div className='flex items-center gap-2'>
+              <Code className='h-4 w-4' />
+              <h3 className='text-lg font-semibold'>Code</h3>
+            </div>
+            <div className='h-[400px] overflow-auto rounded-lg border'>
+              <SyntaxHighlighter
+                language='markup'
+                style={tomorrow}
+                customStyle={{ margin: 0, height: '100%' }}
+              >
+                {modifiedHtml || component.cleanHtml || component.html}
+              </SyntaxHighlighter>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
