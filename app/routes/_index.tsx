@@ -1,15 +1,33 @@
 // _index.tsx
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import type { ActionFunction, LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
 import { Form, useFetcher } from '@remix-run/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Slider } from '@/components/ui/slider'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { Code, Copy, Check, Eye } from 'lucide-react'
+import {
+  Code,
+  Copy,
+  Check,
+  Eye,
+  PlayCircle,
+  Settings,
+  Layout,
+} from 'lucide-react'
+
 import type { ActionData, LoaderData, ExtractedComponent } from '~/types'
 import { extractWebsite } from '~/services/extractor'
 
@@ -141,6 +159,199 @@ function ComponentPreview({ component }: ComponentPreviewProps) {
   )
 }
 
+const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
+  components = [],
+}) => {
+  const [selectedComponent, setSelectedComponent] = useState<string>('')
+  const [customStyles, setCustomStyles] = useState({
+    width: '100',
+    padding: '16',
+    backgroundColor: '#ffffff',
+    borderRadius: '4',
+  })
+  const [modifiedHtml, setModifiedHtml] = useState('')
+
+  const component = components.find((c) => c.name === selectedComponent)
+
+  const updateStyle = (property: string, value: string) => {
+    setCustomStyles((prev) => {
+      const newStyles = {
+        ...prev,
+        [property]: value,
+      }
+      updateModifiedHtml(newStyles)
+      return newStyles
+    })
+  }
+
+  const updateModifiedHtml = (styles: typeof customStyles) => {
+    if (component) {
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(
+        component.cleanHtml || component.html,
+        'text/html',
+      )
+      const element = doc.body.firstElementChild
+
+      if (element) {
+        element.style.width = `${styles.width}%`
+        element.style.padding = `${styles.padding}px`
+        element.style.backgroundColor = styles.backgroundColor
+        element.style.borderRadius = `${styles.borderRadius}px`
+        setModifiedHtml(element.outerHTML)
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (component) {
+      updateModifiedHtml(customStyles)
+    }
+  }, [component])
+
+  if (!components.length) {
+    return null
+  }
+
+  return (
+    <Card className='mt-8'>
+      <CardHeader>
+        <CardTitle className='flex items-center gap-2'>
+          <PlayCircle className='h-5 w-5' />
+          Asset Playground
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className='mb-4'>
+          <Select
+            value={selectedComponent || components[0]?.name}
+            onValueChange={setSelectedComponent}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder='Select a component' />
+            </SelectTrigger>
+            <SelectContent>
+              {components.map((component) => (
+                <SelectItem key={component.name} value={component.name}>
+                  {component.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
+          {/* Preview Section */}
+          <div className='space-y-4'>
+            <div className='flex items-center gap-2'>
+              <Eye className='h-4 w-4' />
+              <h3 className='text-lg font-semibold'>Preview</h3>
+            </div>
+            {component && (
+              <div
+                className='border rounded-lg p-4'
+                style={{
+                  width: `${customStyles.width}%`,
+                  padding: `${customStyles.padding}px`,
+                  backgroundColor: customStyles.backgroundColor,
+                  borderRadius: `${customStyles.borderRadius}px`,
+                }}
+              >
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: component.cleanHtml || component.html,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Code Section */}
+          <div className='space-y-4'>
+            <div className='flex items-center gap-2'>
+              <Code className='h-4 w-4' />
+              <h3 className='text-lg font-semibold'>Code</h3>
+            </div>
+            {component && (
+              <div className='h-[400px] overflow-auto rounded-lg border'>
+                <SyntaxHighlighter
+                  language='markup'
+                  style={tomorrow}
+                  customStyle={{
+                    margin: 0,
+                    height: '100%',
+                  }}
+                >
+                  {modifiedHtml || component.cleanHtml || component.html}
+                </SyntaxHighlighter>
+              </div>
+            )}
+          </div>
+
+          {/* Settings Section */}
+          <div className='space-y-4'>
+            <div className='flex items-center gap-2'>
+              <Settings className='h-4 w-4' />
+              <h3 className='text-lg font-semibold'>Settings</h3>
+            </div>
+            <div>
+              <Label>Width (%)</Label>
+              <Slider
+                value={[parseInt(customStyles.width)]}
+                onValueChange={([value]) =>
+                  updateStyle('width', value.toString())
+                }
+                min={10}
+                max={100}
+                step={1}
+                className='mt-2'
+              />
+            </div>
+
+            <div>
+              <Label>Padding (px)</Label>
+              <Slider
+                value={[parseInt(customStyles.padding)]}
+                onValueChange={([value]) =>
+                  updateStyle('padding', value.toString())
+                }
+                min={0}
+                max={48}
+                step={2}
+                className='mt-2'
+              />
+            </div>
+
+            <div>
+              <Label>Border Radius (px)</Label>
+              <Slider
+                value={[parseInt(customStyles.borderRadius)]}
+                onValueChange={([value]) =>
+                  updateStyle('borderRadius', value.toString())
+                }
+                min={0}
+                max={24}
+                step={1}
+                className='mt-2'
+              />
+            </div>
+
+            <div>
+              <Label>Background Color</Label>
+              <Input
+                type='color'
+                value={customStyles.backgroundColor}
+                onChange={(e) => updateStyle('backgroundColor', e.target.value)}
+                className='h-10 px-3 mt-2'
+              />
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function Index() {
   const [url, setUrl] = useState('')
   const fetcher = useFetcher<ActionData>()
@@ -153,53 +364,87 @@ export default function Index() {
           <CardTitle>FrontendXplorer - Extract UI Components</CardTitle>
         </CardHeader>
         <CardContent>
-          <Form method='post' className='space-y-4'>
-            <div className='flex gap-2'>
-              <Input
-                type='url'
-                name='url'
-                placeholder='Enter a URL to extract UI components'
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                className='flex-1'
-                required
-              />
-              <Button
-                type='button'
-                onClick={() => {
-                  const formData = new FormData()
-                  formData.append('url', url)
-                  fetcher.submit(formData, { method: 'post' })
-                }}
-                disabled={fetcher.state === 'submitting'}
+          <Tabs defaultValue='extract' className='space-y-6'>
+            <TabsList>
+              <TabsTrigger value='extract' className='flex items-center gap-2'>
+                <Code className='h-4 w-4' />
+                Extract Components
+              </TabsTrigger>
+              <TabsTrigger
+                value='playground'
+                className='flex items-center gap-2'
               >
-                {fetcher.state === 'submitting'
-                  ? 'Extracting...'
-                  : 'Extract Components'}
-              </Button>
-            </div>
-          </Form>
+                <PlayCircle className='h-4 w-4' />
+                Asset Playground
+              </TabsTrigger>
+            </TabsList>
 
-          {fetcher.state === 'loading' && (
-            <p className='mt-4 text-gray-500'>Extracting UI components...</p>
-          )}
+            <TabsContent value='extract'>
+              <Form method='post' className='space-y-4'>
+                <div className='flex gap-2'>
+                  <Input
+                    type='url'
+                    name='url'
+                    placeholder='Enter a URL to extract UI components'
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    className='flex-1'
+                    required
+                  />
+                  <Button
+                    type='button'
+                    onClick={() => {
+                      const formData = new FormData()
+                      formData.append('url', url)
+                      fetcher.submit(formData, { method: 'post' })
+                    }}
+                    disabled={fetcher.state === 'submitting'}
+                  >
+                    {fetcher.state === 'submitting'
+                      ? 'Extracting...'
+                      : 'Extract Components'}
+                  </Button>
+                </div>
+              </Form>
 
-          {actionData?.success && actionData.components ? (
-            <div className='mt-6 space-y-4'>
-              {actionData.components.map((component, index) => (
-                <ComponentPreview
-                  key={`${component.type || 'component'}-${index}`}
-                  component={component}
-                />
-              ))}
-            </div>
-          ) : (
-            actionData?.success === false && (
-              <Alert className='mt-4'>
-                <AlertDescription>{actionData.error}</AlertDescription>
-              </Alert>
-            )
-          )}
+              {fetcher.state === 'loading' && (
+                <p className='mt-4 text-gray-500'>
+                  Extracting UI components...
+                </p>
+              )}
+
+              {actionData?.success && actionData.components && (
+                <div className='mt-6 space-y-4'>
+                  {actionData.components.map((component, index) => (
+                    <ComponentPreview
+                      key={`${component.type || 'component'}-${index}`}
+                      component={component}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {actionData?.success === false && (
+                <Alert className='mt-4'>
+                  <AlertDescription>{actionData.error}</AlertDescription>
+                </Alert>
+              )}
+            </TabsContent>
+
+            <TabsContent value='playground'>
+              {actionData?.success &&
+              actionData.components &&
+              actionData.components.length > 0 ? (
+                <AssetPlayground components={actionData.components} />
+              ) : (
+                <Alert>
+                  <AlertDescription>
+                    Extract some components first to use the playground.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>
