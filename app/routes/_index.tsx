@@ -1,4 +1,3 @@
-// _index.tsx
 import React, { useState, useEffect } from 'react'
 import type { ActionFunction, LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
@@ -25,13 +24,10 @@ import {
   Eye,
   PlayCircle,
   Settings,
-  Layout,
 } from 'lucide-react'
-
 import type { ActionData, LoaderData, ExtractedComponent } from '~/types'
 import { extractWebsite } from '~/services/extractor'
 
-// Import react-syntax-highlighter instead of Prism.js
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { tomorrow } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 
@@ -53,7 +49,7 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   try {
-    // Use the extractor directly instead of making a fetch request
+
     const extractedData = await extractWebsite(url)
     return json<ActionData>({
       success: true,
@@ -75,6 +71,7 @@ interface ComponentPreviewProps {
     type?: string
     cleanHtml?: string
     html: string
+    screenshot?: string
     styles?: React.CSSProperties
   }
 }
@@ -90,6 +87,13 @@ function ComponentPreview({ component }: ComponentPreviewProps) {
   }
 
   return (
+    <Card className="mb-6 overflow-hidden border-2 border-periwinkle-200">
+      <CardHeader className="bg-nyanza-100">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2 text-white">
+            {component.name}
+            <Badge variant="secondary" className="text-xs">
+
     <Card className='mb-6 overflow-hidden border-2 border-periwinkle-200'>
       <CardHeader className='bg-nyanza-100'>
         <div className='flex items-center justify-between'>
@@ -100,49 +104,60 @@ function ComponentPreview({ component }: ComponentPreviewProps) {
             </Badge>
           </CardTitle>
           <Button
-            variant='ghost'
-            size='sm'
+            variant="ghost"
+            size="sm"
             onClick={copyToClipboard}
-            className='text-white hover:text-nyanza-500'
+            className="text-white hover:text-nyanza-500"
           >
             {copied ? (
-              <Check className='h-4 w-4 mr-2' />
+              <>
+                <Check className="h-4 w-4 mr-2" /> Copied!
+              </>
             ) : (
-              <Copy className='h-4 w-4 mr-2' />
+              <>
+                <Copy className="h-4 w-4 mr-2" /> Copy Code
+              </>
             )}
-            {copied ? 'Copied!' : 'Copy Code'}
           </Button>
         </div>
       </CardHeader>
-      <CardContent className='p-0'>
+      <CardContent className="p-0">
         <Tabs
-          defaultValue='preview'
+          defaultValue="preview"
           value={activeTab}
           onValueChange={setActiveTab}
-          className='w-full'
+          className="w-full"
         >
-          <TabsList className='w-full border-b'>
-            <TabsTrigger value='preview' className='flex items-center gap-2'>
-              <Eye className='h-4 w-4' />
-              Preview
+          <TabsList className="w-full border-b">
+            <TabsTrigger value="preview" className="flex items-center gap-2">
+              <Eye className="h-4 w-4" /> Preview
             </TabsTrigger>
-            <TabsTrigger value='code' className='flex items-center gap-2'>
-              <Code className='h-4 w-4' />
-              Code
+            <TabsTrigger value="code" className="flex items-center gap-2">
+              <Code className="h-4 w-4" /> Code
             </TabsTrigger>
           </TabsList>
-          <TabsContent value='preview' className='p-4'>
+
+          <TabsContent value="preview" className="p-4">
+            {component.screenshot && (
+              <div className="mb-4">
+                <img
+                  src={component.screenshot}
+                  alt={component.name}
+                  className="border rounded max-w-xs"
+                />
+              </div>
+            )}
             <div
-              className='border rounded p-4 bg-white'
+              className="border rounded p-4 bg-white"
               style={component.styles || {}}
               dangerouslySetInnerHTML={{
                 __html: component.cleanHtml || component.html,
               }}
             />
           </TabsContent>
-          <TabsContent value='code' className='p-0'>
+          <TabsContent value="code" className="p-0">
             <SyntaxHighlighter
-              language='markup'
+              language="markup"
               style={tomorrow}
               customStyle={{
                 padding: '1rem',
@@ -163,7 +178,7 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
   components = [],
 }) => {
   const [selectedComponent, setSelectedComponent] = useState<string>(
-    components[0]?.name || '',
+    components[0]?.name || ''
   )
   const [customStyles, setCustomStyles] = useState({
     width: '100',
@@ -189,7 +204,7 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
       const parser = new DOMParser()
       const doc = parser.parseFromString(
         component.cleanHtml || component.html,
-        'text/html',
+        'text/html'
       )
       const element = doc.body.firstElementChild
 
@@ -214,20 +229,17 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
   }
 
   return (
-    <Card className='mt-8'>
+    <Card className="mt-8">
       <CardHeader>
-        <CardTitle className='flex items-center gap-2'>
-          <PlayCircle className='h-5 w-5' /> Asset Playground
+        <CardTitle className="flex items-center gap-2">
+          <PlayCircle className="h-5 w-5" /> Asset Playground
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className='mb-4'>
-          <Select
-            value={selectedComponent}
-            onValueChange={setSelectedComponent}
-          >
+        <div className="mb-4">
+          <Select value={selectedComponent} onValueChange={setSelectedComponent}>
             <SelectTrigger>
-              <SelectValue placeholder='Select a component' />
+              <SelectValue placeholder="Select a component" />
             </SelectTrigger>
             <SelectContent>
               {components.map((component) => (
@@ -238,17 +250,15 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
             </SelectContent>
           </Select>
         </div>
-
-        <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
-          {/* Preview Section */}
-          <div className='space-y-4'>
-            <div className='flex items-center gap-2'>
-              <Eye className='h-4 w-4' />
-              <h3 className='text-lg font-semibold'>Preview</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              <h3 className="text-lg font-semibold">Preview</h3>
             </div>
             {component && (
               <div
-                className='border rounded-lg p-4'
+                className="border rounded-lg p-4"
                 style={{
                   width: `${customStyles.width}%`,
                   padding: `${customStyles.padding}px`,
@@ -265,12 +275,10 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
               </div>
             )}
           </div>
-
-          {/* Settings Section */}
-          <div className='space-y-4'>
-            <div className='flex items-center gap-2'>
-              <Settings className='h-4 w-4' />
-              <h3 className='text-lg font-semibold'>Settings</h3>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              <h3 className="text-lg font-semibold">Settings</h3>
             </div>
             <div>
               <Label>Width (%)</Label>
@@ -282,8 +290,7 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
                 min={10}
                 max={100}
                 step={1}
-                className='mt-2'
-              />
+                className="mt-2"
             </div>
             <div>
               <Label>Padding (px)</Label>
@@ -295,7 +302,7 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
                 min={0}
                 max={48}
                 step={2}
-                className='mt-2'
+                className="mt-2"
               />
             </div>
             <div>
@@ -308,37 +315,37 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
                 min={0}
                 max={24}
                 step={1}
-                className='mt-2'
+                className="mt-2"
               />
             </div>
             <div>
               <Label>Background Color</Label>
               <Input
-                type='color'
+                type="color"
                 value={customStyles.backgroundColor}
-                onChange={(e) => updateStyle('backgroundColor', e.target.value)}
-                className='h-10 px-3 mt-2'
+                onChange={(e) =>
+                  updateStyle('backgroundColor', e.target.value)
+                }
+                className="h-10 px-3 mt-2"
               />
             </div>
           </div>
         </div>
 
-        {/* Toggle Code Section */}
-        <div className='mt-4'>
+        <div className="mt-4">
           <Button onClick={() => setShowCode(!showCode)}>
             {showCode ? 'Hide Code' : 'Show Code'}
           </Button>
         </div>
-
         {showCode && (
-          <div className='mt-4 space-y-4'>
-            <div className='flex items-center gap-2'>
-              <Code className='h-4 w-4' />
-              <h3 className='text-lg font-semibold'>Code</h3>
+          <div className="mt-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <Code className="h-4 w-4" />
+              <h3 className="text-lg font-semibold">Code</h3>
             </div>
-            <div className='h-[400px] overflow-auto rounded-lg border'>
+            <div className="h-[400px] overflow-auto rounded-lg border">
               <SyntaxHighlighter
-                language='markup'
+                language="markup"
                 style={tomorrow}
                 customStyle={{ margin: 0, height: '100%' }}
               >
@@ -364,35 +371,30 @@ export default function Index() {
           <CardTitle>FrontendXplorer - Extract UI Components</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue='extract' className='space-y-6'>
+          <Tabs defaultValue="extract" className="space-y-6">
             <TabsList>
-              <TabsTrigger value='extract' className='flex items-center gap-2'>
-                <Code className='h-4 w-4' />
-                Extract Components
+              <TabsTrigger value="extract" className="flex items-center gap-2">
+                <Code className="h-4 w-4" /> Extract Components
               </TabsTrigger>
-              <TabsTrigger
-                value='playground'
-                className='flex items-center gap-2'
-              >
-                <PlayCircle className='h-4 w-4' />
-                Asset Playground
+              <TabsTrigger value="playground" className="flex items-center gap-2">
+                <PlayCircle className="h-4 w-4" /> Asset Playground
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value='extract'>
-              <Form method='post' className='space-y-4'>
-                <div className='flex gap-2'>
+            <TabsContent value="extract">
+              <Form method="post" className="space-y-4">
+                <div className="flex gap-2">
                   <Input
-                    type='url'
-                    name='url'
-                    placeholder='Enter a URL to extract UI components'
+                    type="url"
+                    name="url"
+                    placeholder="Enter a URL to extract UI components"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    className='flex-1'
+                    className="flex-1"
                     required
                   />
                   <Button
-                    type='button'
+                    type="button"
                     onClick={() => {
                       const formData = new FormData()
                       formData.append('url', url)
@@ -408,13 +410,13 @@ export default function Index() {
               </Form>
 
               {fetcher.state === 'loading' && (
-                <p className='mt-4 text-gray-500'>
+                <p className="mt-4 text-gray-500">
                   Extracting UI components...
                 </p>
               )}
 
               {actionData?.success && actionData.components && (
-                <div className='mt-6 space-y-4'>
+                <div className="mt-6 space-y-4">
                   {actionData.components.map((component, index) => (
                     <ComponentPreview
                       key={`${component.type || 'component'}-${index}`}
@@ -425,13 +427,12 @@ export default function Index() {
               )}
 
               {actionData?.success === false && (
-                <Alert className='mt-4'>
+                <Alert className="mt-4">
                   <AlertDescription>{actionData.error}</AlertDescription>
                 </Alert>
               )}
             </TabsContent>
-
-            <TabsContent value='playground'>
+            <TabsContent value="playground">
               {actionData?.success &&
               actionData.components &&
               actionData.components.length > 0 ? (
