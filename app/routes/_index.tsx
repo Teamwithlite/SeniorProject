@@ -28,7 +28,6 @@ import {
 import type { ActionData, LoaderData, ExtractedComponent } from '~/types'
 import { extractWebsite } from '~/services/extractor'
 
-// Using react-syntax-highlighter for code display
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { tomorrow } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 
@@ -50,6 +49,7 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   try {
+
     const extractedData = await extractWebsite(url)
     return json<ActionData>({
       success: true,
@@ -93,6 +93,13 @@ function ComponentPreview({ component }: ComponentPreviewProps) {
           <CardTitle className="text-lg flex items-center gap-2 text-white">
             {component.name}
             <Badge variant="secondary" className="text-xs">
+
+    <Card className='mb-6 overflow-hidden border-2 border-periwinkle-200'>
+      <CardHeader className='bg-nyanza-100'>
+        <div className='flex items-center justify-between'>
+          <CardTitle className='text-lg flex items-center gap-2 text-white'>
+            {component.name}
+            <Badge variant='secondary' className='text-xs'>
               {component.type || 'Component'}
             </Badge>
           </CardTitle>
@@ -148,7 +155,6 @@ function ComponentPreview({ component }: ComponentPreviewProps) {
               }}
             />
           </TabsContent>
-
           <TabsContent value="code" className="p-0">
             <SyntaxHighlighter
               language="markup"
@@ -244,7 +250,6 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
             </SelectContent>
           </Select>
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -270,7 +275,6 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
               </div>
             )}
           </div>
-
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
@@ -287,7 +291,6 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
                 max={100}
                 step={1}
                 className="mt-2"
-              />
             </div>
             <div>
               <Label>Padding (px)</Label>
@@ -334,7 +337,6 @@ const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
             {showCode ? 'Hide Code' : 'Show Code'}
           </Button>
         </div>
-
         {showCode && (
           <div className="mt-4 space-y-4">
             <div className="flex items-center gap-2">
@@ -363,8 +365,8 @@ export default function Index() {
   const actionData = fetcher.data
 
   return (
-    <div className="container mx-auto p-6">
-      <Card className="max-w-6xl mx-auto">
+    <div className='container mx-auto p-6'>
+      <Card className='max-w-6xl mx-auto'>
         <CardHeader>
           <CardTitle>FrontendXplorer - Extract UI Components</CardTitle>
         </CardHeader>
@@ -430,7 +432,6 @@ export default function Index() {
                 </Alert>
               )}
             </TabsContent>
-
             <TabsContent value="playground">
               {actionData?.success &&
               actionData.components &&

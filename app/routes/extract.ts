@@ -1,4 +1,3 @@
-// app/routes/extract.ts
 import { json } from '@remix-run/node';
 import { extractWebsite } from '~/services/extractor';
 
