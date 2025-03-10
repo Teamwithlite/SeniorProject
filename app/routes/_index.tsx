@@ -146,6 +146,7 @@ const ComponentPreview = memo(({ component }: ComponentPreviewProps) => {
               dangerouslySetInnerHTML={previewHtml}
             />
           </TabsContent>
+<<<<<<< Updated upstream
 
           {activeTab === 'code' && (
             <TabsContent value='code' className='p-0'>
@@ -162,6 +163,21 @@ const ComponentPreview = memo(({ component }: ComponentPreviewProps) => {
               </SyntaxHighlighter>
             </TabsContent>
           )}
+=======
+          <TabsContent value='code' className='p-0'>
+            <SyntaxHighlighter
+              language='markup'
+              style={tomorrow}
+              customStyle={{
+                padding: '1rem',
+                margin: 0,
+                borderRadius: '0.5rem',
+              }}
+            >
+              {component.cleanHtml || component.html}
+            </SyntaxHighlighter>
+          </TabsContent>
+>>>>>>> Stashed changes
         </Tabs>
       </CardContent>
     </Card>
@@ -269,7 +285,10 @@ const AssetPlayground = memo(
               </SelectContent>
             </Select>
           </div>
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
           <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
             <div className='space-y-4'>
               <div className='flex items-center gap-2'>
@@ -277,12 +296,24 @@ const AssetPlayground = memo(
                 <h3 className='text-lg font-semibold'>Preview</h3>
               </div>
               {component && (
-                <div className='border rounded-lg p-4' style={computedStyles}>
-                  <div dangerouslySetInnerHTML={previewHtml} />
+                <div
+                  className='border rounded-lg p-4'
+                  style={{
+                    width: `${customStyles.width}%`,
+                    padding: `${customStyles.padding}px`,
+                    backgroundColor: customStyles.backgroundColor,
+                    borderRadius: `${customStyles.borderRadius}px`,
+                  }}
+                >
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html:
+                        modifiedHtml || component.cleanHtml || component.html,
+                    }}
+                  />
                 </div>
               )}
             </div>
-
             <div className='space-y-4'>
               <div className='flex items-center gap-2'>
                 <Settings className='h-4 w-4' />
@@ -346,7 +377,6 @@ const AssetPlayground = memo(
               {showCode ? 'Hide Code' : 'Show Code'}
             </Button>
           </div>
-
           {showCode && (
             <div className='mt-4 space-y-4'>
               <div className='flex items-center gap-2'>
@@ -359,8 +389,7 @@ const AssetPlayground = memo(
                   style={tomorrow}
                   customStyle={{ margin: 0, height: '100%' }}
                 >
-                  {modifiedHtml ||
-                    (component ? component.cleanHtml || component.html : '')}
+                  {modifiedHtml || component.cleanHtml || component.html}
                 </SyntaxHighlighter>
               </div>
             </div>
@@ -378,19 +407,11 @@ export default function Index() {
   const fetcher = useFetcher<ActionData>()
   const actionData = fetcher.data
 
-  const handleSubmit = useCallback(() => {
-    if (!url) return
+  const handleSubmit = () => {
     const formData = new FormData()
     formData.append('url', url)
     fetcher.submit(formData, { method: 'post' })
-  }, [url, fetcher])
-
-  // Memoize components to avoid re-renders when other state changes
-  const extractedComponents = useMemo(() => {
-    return actionData?.success && actionData.components
-      ? actionData.components
-      : []
-  }, [actionData?.success, actionData?.components])
+  }
 
   return (
     <div className='container mx-auto p-6'>
@@ -443,16 +464,18 @@ export default function Index() {
                 </p>
               )}
 
-              {extractedComponents.length > 0 && (
-                <div className='mt-6 space-y-4'>
-                  {extractedComponents.map((component, index) => (
-                    <ComponentPreview
-                      key={`${component.type || 'component'}-${index}`}
-                      component={component}
-                    />
-                  ))}
-                </div>
-              )}
+              {actionData?.success &&
+                actionData.components &&
+                actionData.components.length > 0 && (
+                  <div className='mt-6 space-y-4'>
+                    {actionData.components.map((component, index) => (
+                      <ComponentPreview
+                        key={`${component.type || 'component'}-${index}`}
+                        component={component}
+                      />
+                    ))}
+                  </div>
+                )}
 
               {actionData?.success === false && (
                 <Alert className='mt-4'>
@@ -462,8 +485,15 @@ export default function Index() {
             </TabsContent>
 
             <TabsContent value='playground'>
+<<<<<<< Updated upstream
               {extractedComponents.length > 0 ? (
                 <AssetPlayground components={extractedComponents} />
+=======
+              {actionData?.success &&
+              actionData.components &&
+              actionData.components.length > 0 ? (
+                <AssetPlayground components={actionData.components} />
+>>>>>>> Stashed changes
               ) : (
                 <Alert>
                   <AlertDescription>
