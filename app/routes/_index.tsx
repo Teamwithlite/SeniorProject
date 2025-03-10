@@ -21,7 +21,6 @@ import { Code, Copy, Check, Eye, PlayCircle, Settings } from 'lucide-react'
 import type { ActionData, LoaderData, ExtractedComponent } from '~/types'
 import { extractWebsite } from '~/services/extractor'
 
-// Using react-syntax-highlighter for code display
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { tomorrow } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 
@@ -43,6 +42,7 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   try {
+
     const extractedData = await extractWebsite(url)
     return json<ActionData>({
       success: true,
@@ -91,6 +91,16 @@ const ComponentPreview = memo(({ component }: ComponentPreviewProps) => {
         <div className='flex items-center justify-between'>
           <CardTitle className='text-lg flex items-center gap-2 text-white'>
             {component.name}
+<<<<<<< HEAD
+=======
+            <Badge variant="secondary" className="text-xs">
+
+    <Card className='mb-6 overflow-hidden border-2 border-periwinkle-200'>
+      <CardHeader className='bg-nyanza-100'>
+        <div className='flex items-center justify-between'>
+          <CardTitle className='text-lg flex items-center gap-2 text-white'>
+            {component.name}
+>>>>>>> parent of 1b261c6 (fix conflict)
             <Badge variant='secondary' className='text-xs'>
               {component.type || 'Component'}
             </Badge>
@@ -146,6 +156,7 @@ const ComponentPreview = memo(({ component }: ComponentPreviewProps) => {
               dangerouslySetInnerHTML={previewHtml}
             />
           </TabsContent>
+<<<<<<< HEAD
 
           {activeTab === 'code' && (
             <TabsContent value='code' className='p-0'>
@@ -162,6 +173,21 @@ const ComponentPreview = memo(({ component }: ComponentPreviewProps) => {
               </SyntaxHighlighter>
             </TabsContent>
           )}
+=======
+          <TabsContent value="code" className="p-0">
+            <SyntaxHighlighter
+              language="markup"
+              style={tomorrow}
+              customStyle={{
+                padding: '1rem',
+                margin: 0,
+                borderRadius: '0.5rem',
+              }}
+            >
+              {component.cleanHtml || component.html}
+            </SyntaxHighlighter>
+          </TabsContent>
+>>>>>>> parent of 1b261c6 (fix conflict)
         </Tabs>
       </CardContent>
     </Card>
@@ -270,6 +296,7 @@ const AssetPlayground = memo(
             </Select>
           </div>
 
+<<<<<<< HEAD
           <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
             <div className='space-y-4'>
               <div className='flex items-center gap-2'>
@@ -281,6 +308,39 @@ const AssetPlayground = memo(
                   <div dangerouslySetInnerHTML={previewHtml} />
                 </div>
               )}
+=======
+  if (!components.length) {
+    return null
+  }
+
+  return (
+    <Card className="mt-8">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <PlayCircle className="h-5 w-5" /> Asset Playground
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-4">
+          <Select value={selectedComponent} onValueChange={setSelectedComponent}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a component" />
+            </SelectTrigger>
+            <SelectContent>
+              {components.map((component) => (
+                <SelectItem key={component.name} value={component.name}>
+                  {component.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              <h3 className="text-lg font-semibold">Preview</h3>
+>>>>>>> parent of 1b261c6 (fix conflict)
             </div>
 
             <div className='space-y-4'>
@@ -338,13 +398,94 @@ const AssetPlayground = memo(
                   className='h-10 px-3 mt-2'
                 />
               </div>
+<<<<<<< HEAD
+=======
+            )}
+          </div>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              <h3 className="text-lg font-semibold">Settings</h3>
+            </div>
+            <div>
+              <Label>Width (%)</Label>
+              <Slider
+                value={[parseInt(customStyles.width)]}
+                onValueChange={([value]) =>
+                  updateStyle('width', value.toString())
+                }
+                min={10}
+                max={100}
+                step={1}
+                className="mt-2"
+            </div>
+            <div>
+              <Label>Padding (px)</Label>
+              <Slider
+                value={[parseInt(customStyles.padding)]}
+                onValueChange={([value]) =>
+                  updateStyle('padding', value.toString())
+                }
+                min={0}
+                max={48}
+                step={2}
+                className="mt-2"
+              />
+            </div>
+            <div>
+              <Label>Border Radius (px)</Label>
+              <Slider
+                value={[parseInt(customStyles.borderRadius)]}
+                onValueChange={([value]) =>
+                  updateStyle('borderRadius', value.toString())
+                }
+                min={0}
+                max={24}
+                step={1}
+                className="mt-2"
+              />
+            </div>
+            <div>
+              <Label>Background Color</Label>
+              <Input
+                type="color"
+                value={customStyles.backgroundColor}
+                onChange={(e) =>
+                  updateStyle('backgroundColor', e.target.value)
+                }
+                className="h-10 px-3 mt-2"
+              />
+>>>>>>> parent of 1b261c6 (fix conflict)
             </div>
           </div>
 
+<<<<<<< HEAD
           <div className='mt-4'>
             <Button onClick={() => setShowCode(!showCode)}>
               {showCode ? 'Hide Code' : 'Show Code'}
             </Button>
+=======
+        <div className="mt-4">
+          <Button onClick={() => setShowCode(!showCode)}>
+            {showCode ? 'Hide Code' : 'Show Code'}
+          </Button>
+        </div>
+        {showCode && (
+          <div className="mt-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <Code className="h-4 w-4" />
+              <h3 className="text-lg font-semibold">Code</h3>
+            </div>
+            <div className="h-[400px] overflow-auto rounded-lg border">
+              <SyntaxHighlighter
+                language="markup"
+                style={tomorrow}
+                customStyle={{ margin: 0, height: '100%' }}
+              >
+                {modifiedHtml || component.cleanHtml || component.html}
+              </SyntaxHighlighter>
+            </div>
+>>>>>>> parent of 1b261c6 (fix conflict)
           </div>
 
           {showCode && (
@@ -460,10 +601,18 @@ export default function Index() {
                 </Alert>
               )}
             </TabsContent>
+<<<<<<< HEAD
 
             <TabsContent value='playground'>
               {extractedComponents.length > 0 ? (
                 <AssetPlayground components={extractedComponents} />
+=======
+            <TabsContent value="playground">
+              {actionData?.success &&
+              actionData.components &&
+              actionData.components.length > 0 ? (
+                <AssetPlayground components={actionData.components} />
+>>>>>>> parent of 1b261c6 (fix conflict)
               ) : (
                 <Alert>
                   <AlertDescription>
