@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import type { ActionFunction, LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
 import { Form, useFetcher } from '@remix-run/react'
@@ -17,14 +17,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import {
-  Code,
-  Copy,
-  Check,
-  Eye,
-  PlayCircle,
-  Settings,
-} from 'lucide-react'
+import { Code, Copy, Check, Eye, PlayCircle, Settings } from 'lucide-react'
 import type { ActionData, LoaderData, ExtractedComponent } from '~/types'
 import { extractWebsite } from '~/services/extractor'
 
@@ -76,328 +69,365 @@ interface ComponentPreviewProps {
   }
 }
 
-function ComponentPreview({ component }: ComponentPreviewProps) {
+// Memoized component to prevent unnecessary re-renders
+const ComponentPreview = memo(({ component }: ComponentPreviewProps) => {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('preview')
 
-  const copyToClipboard = async () => {
+  const copyToClipboard = useCallback(async () => {
     await navigator.clipboard.writeText(component.cleanHtml || component.html)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
+  }, [component.cleanHtml, component.html])
+
+  // Pre-render the HTML content
+  const previewHtml = useMemo(() => {
+    return { __html: component.cleanHtml || component.html }
+  }, [component.cleanHtml, component.html])
 
   return (
-    <Card className="mb-6 overflow-hidden border-2 border-periwinkle-200">
-      <CardHeader className="bg-nyanza-100">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2 text-white">
+    <Card className='mb-6 overflow-hidden border-2 border-periwinkle-200'>
+      <CardHeader className='bg-nyanza-100'>
+        <div className='flex items-center justify-between'>
+          <CardTitle className='text-lg flex items-center gap-2 text-white'>
             {component.name}
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant='secondary' className='text-xs'>
               {component.type || 'Component'}
             </Badge>
           </CardTitle>
           <Button
-            variant="ghost"
-            size="sm"
+            variant='ghost'
+            size='sm'
             onClick={copyToClipboard}
-            className="text-white hover:text-nyanza-500"
+            className='text-white hover:text-nyanza-500'
           >
             {copied ? (
               <>
-                <Check className="h-4 w-4 mr-2" /> Copied!
+                <Check className='h-4 w-4 mr-2' /> Copied!
               </>
             ) : (
               <>
-                <Copy className="h-4 w-4 mr-2" /> Copy Code
+                <Copy className='h-4 w-4 mr-2' /> Copy Code
               </>
             )}
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="p-0">
+      <CardContent className='p-0'>
         <Tabs
-          defaultValue="preview"
+          defaultValue='preview'
           value={activeTab}
           onValueChange={setActiveTab}
-          className="w-full"
+          className='w-full'
         >
-          <TabsList className="w-full border-b">
-            <TabsTrigger value="preview" className="flex items-center gap-2">
-              <Eye className="h-4 w-4" /> Preview
+          <TabsList className='w-full border-b'>
+            <TabsTrigger value='preview' className='flex items-center gap-2'>
+              <Eye className='h-4 w-4' /> Preview
             </TabsTrigger>
-            <TabsTrigger value="code" className="flex items-center gap-2">
-              <Code className="h-4 w-4" /> Code
+            <TabsTrigger value='code' className='flex items-center gap-2'>
+              <Code className='h-4 w-4' /> Code
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="preview" className="p-4">
+          <TabsContent value='preview' className='p-4'>
             {component.screenshot && (
-              <div className="mb-4">
+              <div className='mb-4'>
                 <img
                   src={component.screenshot}
                   alt={component.name}
-                  className="border rounded max-w-xs"
+                  className='border rounded max-w-xs'
+                  loading='lazy'
                 />
               </div>
             )}
             <div
-              className="border rounded p-4 bg-white"
+              className='border rounded p-4 bg-white'
               style={component.styles || {}}
-              dangerouslySetInnerHTML={{
-                __html: component.cleanHtml || component.html,
-              }}
+              dangerouslySetInnerHTML={previewHtml}
             />
           </TabsContent>
 
-          <TabsContent value="code" className="p-0">
-            <SyntaxHighlighter
-              language="markup"
-              style={tomorrow}
-              customStyle={{
-                padding: '1rem',
-                margin: 0,
-                borderRadius: '0.5rem',
-              }}
-            >
-              {component.cleanHtml || component.html}
-            </SyntaxHighlighter>
-          </TabsContent>
+          {activeTab === 'code' && (
+            <TabsContent value='code' className='p-0'>
+              <SyntaxHighlighter
+                language='markup'
+                style={tomorrow}
+                customStyle={{
+                  padding: '1rem',
+                  margin: 0,
+                  borderRadius: '0.5rem',
+                }}
+              >
+                {component.cleanHtml || component.html}
+              </SyntaxHighlighter>
+            </TabsContent>
+          )}
         </Tabs>
       </CardContent>
     </Card>
   )
-}
+})
 
-const AssetPlayground: React.FC<{ components: ExtractedComponent[] }> = ({
-  components = [],
-}) => {
-  const [selectedComponent, setSelectedComponent] = useState<string>(
-    components[0]?.name || ''
-  )
-  const [customStyles, setCustomStyles] = useState({
-    width: '100',
-    padding: '16',
-    backgroundColor: '#ffffff',
-    borderRadius: '4',
-  })
-  const [modifiedHtml, setModifiedHtml] = useState('')
-  const [showCode, setShowCode] = useState(false)
+ComponentPreview.displayName = 'ComponentPreview'
 
-  const component = components.find((c) => c.name === selectedComponent)
-
-  const updateStyle = (property: string, value: string) => {
-    setCustomStyles((prev) => {
-      const newStyles = { ...prev, [property]: value }
-      updateModifiedHtml(newStyles)
-      return newStyles
+// Memoized component to prevent unnecessary re-renders
+const AssetPlayground = memo(
+  ({ components = [] }: { components: ExtractedComponent[] }) => {
+    const [selectedComponent, setSelectedComponent] = useState<string>(
+      components[0]?.name || '',
+    )
+    const [customStyles, setCustomStyles] = useState({
+      width: '100',
+      padding: '16',
+      backgroundColor: '#ffffff',
+      borderRadius: '4',
     })
-  }
+    const [modifiedHtml, setModifiedHtml] = useState('')
+    const [showCode, setShowCode] = useState(false)
 
-  const updateModifiedHtml = (styles: typeof customStyles) => {
-    if (component) {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(
-        component.cleanHtml || component.html,
-        'text/html'
-      )
-      const element = doc.body.firstElementChild
+    // Find the selected component - memoized to prevent recalculation
+    const component = useMemo(() => {
+      return components.find((c) => c.name === selectedComponent)
+    }, [components, selectedComponent])
 
-      if (element) {
-        element.style.width = `${styles.width}%`
-        element.style.padding = `${styles.padding}px`
-        element.style.backgroundColor = styles.backgroundColor
-        element.style.borderRadius = `${styles.borderRadius}px`
-        setModifiedHtml(element.outerHTML)
+    // Memoize the style object to avoid recreation on every render
+    const computedStyles = useMemo(() => {
+      return {
+        width: `${customStyles.width}%`,
+        padding: `${customStyles.padding}px`,
+        backgroundColor: customStyles.backgroundColor,
+        borderRadius: `${customStyles.borderRadius}px`,
       }
+    }, [customStyles])
+
+    const updateStyle = useCallback((property: string, value: string) => {
+      setCustomStyles((prev) => {
+        const newStyles = { ...prev, [property]: value }
+        return newStyles
+      })
+    }, [])
+
+    // Debounced HTML update to avoid too many DOM operations
+    useEffect(() => {
+      if (!component) return
+
+      const updateHtmlTimeout = setTimeout(() => {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(
+          component.cleanHtml || component.html,
+          'text/html',
+        )
+        const element = doc.body.firstElementChild
+
+        if (element) {
+          element.style.width = `${customStyles.width}%`
+          element.style.padding = `${customStyles.padding}px`
+          element.style.backgroundColor = customStyles.backgroundColor
+          element.style.borderRadius = `${customStyles.borderRadius}px`
+          setModifiedHtml(element.outerHTML)
+        }
+      }, 50) // Small delay to batch multiple style changes
+
+      return () => clearTimeout(updateHtmlTimeout)
+    }, [component, customStyles])
+
+    // Memoize HTML content to avoid re-parsing on every render
+    const previewHtml = useMemo(() => {
+      return {
+        __html:
+          modifiedHtml ||
+          (component ? component.cleanHtml || component.html : ''),
+      }
+    }, [modifiedHtml, component])
+
+    if (!components.length) {
+      return null
     }
-  }
 
-  useEffect(() => {
-    if (component) {
-      updateModifiedHtml(customStyles)
-    }
-  }, [component])
+    return (
+      <Card className='mt-8'>
+        <CardHeader>
+          <CardTitle className='flex items-center gap-2'>
+            <PlayCircle className='h-5 w-5' /> Asset Playground
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className='mb-4'>
+            <Select
+              value={selectedComponent}
+              onValueChange={setSelectedComponent}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder='Select a component' />
+              </SelectTrigger>
+              <SelectContent>
+                {components.map((component) => (
+                  <SelectItem key={component.name} value={component.name}>
+                    {component.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-  if (!components.length) {
-    return null
-  }
-
-  return (
-    <Card className="mt-8">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <PlayCircle className="h-5 w-5" /> Asset Playground
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="mb-4">
-          <Select value={selectedComponent} onValueChange={setSelectedComponent}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a component" />
-            </SelectTrigger>
-            <SelectContent>
-              {components.map((component) => (
-                <SelectItem key={component.name} value={component.name}>
-                  {component.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Eye className="h-4 w-4" />
-              <h3 className="text-lg font-semibold">Preview</h3>
+          <div className='grid grid-cols-1 lg:grid-cols-3 gap-4'>
+            <div className='space-y-4'>
+              <div className='flex items-center gap-2'>
+                <Eye className='h-4 w-4' />
+                <h3 className='text-lg font-semibold'>Preview</h3>
+              </div>
+              {component && (
+                <div className='border rounded-lg p-4' style={computedStyles}>
+                  <div dangerouslySetInnerHTML={previewHtml} />
+                </div>
+              )}
             </div>
-            {component && (
-              <div
-                className="border rounded-lg p-4"
-                style={{
-                  width: `${customStyles.width}%`,
-                  padding: `${customStyles.padding}px`,
-                  backgroundColor: customStyles.backgroundColor,
-                  borderRadius: `${customStyles.borderRadius}px`,
-                }}
-              >
-                <div
-                  dangerouslySetInnerHTML={{
-                    __html:
-                      modifiedHtml || component.cleanHtml || component.html,
-                  }}
+
+            <div className='space-y-4'>
+              <div className='flex items-center gap-2'>
+                <Settings className='h-4 w-4' />
+                <h3 className='text-lg font-semibold'>Settings</h3>
+              </div>
+              <div>
+                <Label>Width (%)</Label>
+                <Slider
+                  value={[parseInt(customStyles.width)]}
+                  onValueChange={([value]) =>
+                    updateStyle('width', value.toString())
+                  }
+                  min={10}
+                  max={100}
+                  step={1}
+                  className='mt-2'
                 />
               </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              <h3 className="text-lg font-semibold">Settings</h3>
-            </div>
-            <div>
-              <Label>Width (%)</Label>
-              <Slider
-                value={[parseInt(customStyles.width)]}
-                onValueChange={([value]) =>
-                  updateStyle('width', value.toString())
-                }
-                min={10}
-                max={100}
-                step={1}
-                className="mt-2"
-              />
-            </div>
-            <div>
-              <Label>Padding (px)</Label>
-              <Slider
-                value={[parseInt(customStyles.padding)]}
-                onValueChange={([value]) =>
-                  updateStyle('padding', value.toString())
-                }
-                min={0}
-                max={48}
-                step={2}
-                className="mt-2"
-              />
-            </div>
-            <div>
-              <Label>Border Radius (px)</Label>
-              <Slider
-                value={[parseInt(customStyles.borderRadius)]}
-                onValueChange={([value]) =>
-                  updateStyle('borderRadius', value.toString())
-                }
-                min={0}
-                max={24}
-                step={1}
-                className="mt-2"
-              />
-            </div>
-            <div>
-              <Label>Background Color</Label>
-              <Input
-                type="color"
-                value={customStyles.backgroundColor}
-                onChange={(e) =>
-                  updateStyle('backgroundColor', e.target.value)
-                }
-                className="h-10 px-3 mt-2"
-              />
+              <div>
+                <Label>Padding (px)</Label>
+                <Slider
+                  value={[parseInt(customStyles.padding)]}
+                  onValueChange={([value]) =>
+                    updateStyle('padding', value.toString())
+                  }
+                  min={0}
+                  max={48}
+                  step={2}
+                  className='mt-2'
+                />
+              </div>
+              <div>
+                <Label>Border Radius (px)</Label>
+                <Slider
+                  value={[parseInt(customStyles.borderRadius)]}
+                  onValueChange={([value]) =>
+                    updateStyle('borderRadius', value.toString())
+                  }
+                  min={0}
+                  max={24}
+                  step={1}
+                  className='mt-2'
+                />
+              </div>
+              <div>
+                <Label>Background Color</Label>
+                <Input
+                  type='color'
+                  value={customStyles.backgroundColor}
+                  onChange={(e) =>
+                    updateStyle('backgroundColor', e.target.value)
+                  }
+                  className='h-10 px-3 mt-2'
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="mt-4">
-          <Button onClick={() => setShowCode(!showCode)}>
-            {showCode ? 'Hide Code' : 'Show Code'}
-          </Button>
-        </div>
-
-        {showCode && (
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <Code className="h-4 w-4" />
-              <h3 className="text-lg font-semibold">Code</h3>
-            </div>
-            <div className="h-[400px] overflow-auto rounded-lg border">
-              <SyntaxHighlighter
-                language="markup"
-                style={tomorrow}
-                customStyle={{ margin: 0, height: '100%' }}
-              >
-                {modifiedHtml || component.cleanHtml || component.html}
-              </SyntaxHighlighter>
-            </div>
+          <div className='mt-4'>
+            <Button onClick={() => setShowCode(!showCode)}>
+              {showCode ? 'Hide Code' : 'Show Code'}
+            </Button>
           </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
+
+          {showCode && (
+            <div className='mt-4 space-y-4'>
+              <div className='flex items-center gap-2'>
+                <Code className='h-4 w-4' />
+                <h3 className='text-lg font-semibold'>Code</h3>
+              </div>
+              <div className='h-[400px] overflow-auto rounded-lg border'>
+                <SyntaxHighlighter
+                  language='markup'
+                  style={tomorrow}
+                  customStyle={{ margin: 0, height: '100%' }}
+                >
+                  {modifiedHtml ||
+                    (component ? component.cleanHtml || component.html : '')}
+                </SyntaxHighlighter>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
+  },
+)
+
+AssetPlayground.displayName = 'AssetPlayground'
 
 export default function Index() {
   const [url, setUrl] = useState('')
   const fetcher = useFetcher<ActionData>()
   const actionData = fetcher.data
 
+  const handleSubmit = useCallback(() => {
+    if (!url) return
+    const formData = new FormData()
+    formData.append('url', url)
+    fetcher.submit(formData, { method: 'post' })
+  }, [url, fetcher])
+
+  // Memoize components to avoid re-renders when other state changes
+  const extractedComponents = useMemo(() => {
+    return actionData?.success && actionData.components
+      ? actionData.components
+      : []
+  }, [actionData?.success, actionData?.components])
+
   return (
-    <div className="container mx-auto p-6">
-      <Card className="max-w-6xl mx-auto">
+    <div className='container mx-auto p-6'>
+      <Card className='max-w-6xl mx-auto'>
         <CardHeader>
           <CardTitle>FrontendXplorer - Extract UI Components</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="extract" className="space-y-6">
+          <Tabs defaultValue='extract' className='space-y-6'>
             <TabsList>
-              <TabsTrigger value="extract" className="flex items-center gap-2">
-                <Code className="h-4 w-4" /> Extract Components
+              <TabsTrigger value='extract' className='flex items-center gap-2'>
+                <Code className='h-4 w-4' /> Extract Components
               </TabsTrigger>
-              <TabsTrigger value="playground" className="flex items-center gap-2">
-                <PlayCircle className="h-4 w-4" /> Asset Playground
+              <TabsTrigger
+                value='playground'
+                className='flex items-center gap-2'
+              >
+                <PlayCircle className='h-4 w-4' /> Asset Playground
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="extract">
-              <Form method="post" className="space-y-4">
-                <div className="flex gap-2">
+            <TabsContent value='extract'>
+              <div className='space-y-4'>
+                <div className='flex gap-2'>
                   <Input
-                    type="url"
-                    name="url"
-                    placeholder="Enter a URL to extract UI components"
+                    type='url'
+                    name='url'
+                    placeholder='Enter a URL to extract UI components'
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    className="flex-1"
+                    className='flex-1'
                     required
+                    onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                   />
                   <Button
-                    type="button"
-                    onClick={() => {
-                      const formData = new FormData()
-                      formData.append('url', url)
-                      fetcher.submit(formData, { method: 'post' })
-                    }}
+                    type='button'
+                    onClick={handleSubmit}
                     disabled={fetcher.state === 'submitting'}
                   >
                     {fetcher.state === 'submitting'
@@ -405,17 +435,17 @@ export default function Index() {
                       : 'Extract Components'}
                   </Button>
                 </div>
-              </Form>
+              </div>
 
               {fetcher.state === 'loading' && (
-                <p className="mt-4 text-gray-500">
+                <p className='mt-4 text-gray-500'>
                   Extracting UI components...
                 </p>
               )}
 
-              {actionData?.success && actionData.components && (
-                <div className="mt-6 space-y-4">
-                  {actionData.components.map((component, index) => (
+              {extractedComponents.length > 0 && (
+                <div className='mt-6 space-y-4'>
+                  {extractedComponents.map((component, index) => (
                     <ComponentPreview
                       key={`${component.type || 'component'}-${index}`}
                       component={component}
@@ -425,17 +455,15 @@ export default function Index() {
               )}
 
               {actionData?.success === false && (
-                <Alert className="mt-4">
+                <Alert className='mt-4'>
                   <AlertDescription>{actionData.error}</AlertDescription>
                 </Alert>
               )}
             </TabsContent>
 
-            <TabsContent value="playground">
-              {actionData?.success &&
-              actionData.components &&
-              actionData.components.length > 0 ? (
-                <AssetPlayground components={actionData.components} />
+            <TabsContent value='playground'>
+              {extractedComponents.length > 0 ? (
+                <AssetPlayground components={extractedComponents} />
               ) : (
                 <Alert>
                   <AlertDescription>
