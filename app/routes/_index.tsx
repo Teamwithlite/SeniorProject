@@ -99,49 +99,54 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
     await navigator.clipboard.writeText(component.html)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
+  }, [component.cleanHtml, component.html])
+
+  // Pre-render the HTML content
+  const previewHtml = useMemo(() => {
+    return { __html: component.cleanHtml || component.html }
+  }, [component.cleanHtml, component.html])
 
   return (
-    <Card className="mb-6 overflow-hidden border-2 border-periwinkle-200">
-      <CardHeader className="bg-nyanza-100">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2 text-white">
+    <Card className='mb-6 overflow-hidden border-2 border-periwinkle-200'>
+      <CardHeader className='bg-nyanza-100'>
+        <div className='flex items-center justify-between'>
+          <CardTitle className='text-lg flex items-center gap-2 text-white'>
             {component.name}
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant='secondary' className='text-xs'>
               {component.type || 'Component'}
             </Badge>
           </CardTitle>
           <Button
-            variant="ghost"
-            size="sm"
+            variant='ghost'
+            size='sm'
             onClick={copyToClipboard}
-            className="text-white hover:text-nyanza-500"
+            className='text-white hover:text-nyanza-500'
           >
             {copied ? (
               <>
-                <Check className="h-4 w-4 mr-2" /> Copied!
+                <Check className='h-4 w-4 mr-2' /> Copied!
               </>
             ) : (
               <>
-                <Copy className="h-4 w-4 mr-2" /> Copy Code
+                <Copy className='h-4 w-4 mr-2' /> Copy Code
               </>
             )}
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="p-0">
+      <CardContent className='p-0'>
         <Tabs
-          defaultValue="preview"
+          defaultValue='preview'
           value={activeTab}
           onValueChange={setActiveTab}
-          className="w-full"
+          className='w-full'
         >
-          <TabsList className="w-full border-b">
-            <TabsTrigger value="preview" className="flex items-center gap-2">
-              <Eye className="h-4 w-4" /> Preview
+          <TabsList className='w-full border-b'>
+            <TabsTrigger value='preview' className='flex items-center gap-2'>
+              <Eye className='h-4 w-4' /> Preview
             </TabsTrigger>
-            <TabsTrigger value="code" className="flex items-center gap-2">
-              <Code className="h-4 w-4" /> Code
+            <TabsTrigger value='code' className='flex items-center gap-2'>
+              <Code className='h-4 w-4' /> Code
             </TabsTrigger>
           </TabsList>
 
@@ -213,7 +218,7 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
           {/* CODE TAB */}
           <TabsContent value="code" className="p-0">
             <SyntaxHighlighter
-              language="markup"
+              language='markup'
               style={tomorrow}
               customStyle={{
                 padding: '1rem',
@@ -436,16 +441,16 @@ export default function Index() {
     : 0
 
   return (
-    <div className="container mx-auto p-6">
-      <Card className="max-w-6xl mx-auto">
+    <div className='container mx-auto p-6'>
+      <Card className='max-w-6xl mx-auto'>
         <CardHeader>
           <CardTitle>FrontendXplorer - Extract UI Components</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList>
-              <TabsTrigger value="extract" className="flex items-center gap-2">
-                <Code className="h-4 w-4" /> Extract Components
+              <TabsTrigger value='extract' className='flex items-center gap-2'>
+                <Code className='h-4 w-4' /> Extract Components
               </TabsTrigger>
               <TabsTrigger
                 value="playground"
