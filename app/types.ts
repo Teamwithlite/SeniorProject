@@ -1,4 +1,4 @@
-// types.ts
+// app/types.ts
 export interface ComponentStyle {
   backgroundColor?: string;
   color?: string;
@@ -19,7 +19,7 @@ export interface ExtractedComponent {
   name: string;
   html: string;
   cleanHtml?: string;
-  code?: string;
+  screenshot?: string;
   styles?: ComponentStyle;
   metadata?: {
     tagName: string;
@@ -32,8 +32,16 @@ export interface ExtractedComponent {
 }
 
 export interface ActionData {
-  success: boolean;
+  success?: boolean;
   error?: string;
+  sessionId?: string;
+  status?: string;
+  progress?: number;
+  message?: string;
+  componentsFound?: number;
+  componentsProcessed?: number;
+  totalPages?: number;
+  currentPage?: number;
   components?: ExtractedComponent[];
 }
 
