@@ -38,6 +38,7 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  Chrome,
 } from 'lucide-react'
 
 // For code highlighting - make sure these are installed
@@ -258,6 +259,8 @@ export default function ExtractPage() {
     borderRadius: '',
   })
   const [copiedCustom, setCopiedCustom] = useState(false)
+  const [savedLinks, setSavedLinks] = useState<string[]>([])
+  const [showSavedLinks, setShowSavedLinks] = useState(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const extractionStartTime = useRef<number | null>(null)
 
@@ -270,11 +273,16 @@ export default function ExtractPage() {
   useEffect(() => {
     const storedData = localStorage.getItem('extractionData')
     const storedSessionId = localStorage.getItem('sessionId')
+    const storedLinks = localStorage.getItem('savedLinks')
+
     if (storedData) {
       setExtractionData(JSON.parse(storedData))
     }
     if (storedSessionId) {
       setSessionId(storedSessionId)
+    }
+    if (storedLinks) {
+      setSavedLinks(JSON.parse(storedLinks))
     }
   }, [])
 
@@ -292,6 +300,15 @@ export default function ExtractPage() {
     }
   }, [sessionId])
 
+  // Function to save links to history
+  const saveLink = (link: string) => {
+    if (!link) return
+
+    const updatedLinks = Array.from(new Set([link, ...savedLinks])).slice(0, 5) // Keep only 5 unique links
+    setSavedLinks(updatedLinks)
+    localStorage.setItem('savedLinks', JSON.stringify(updatedLinks))
+  }
+
   // Function to clear stored data
   const clearStoredData = () => {
     setExtractionData(null)
@@ -299,6 +316,7 @@ export default function ExtractPage() {
     localStorage.removeItem('extractionData')
     localStorage.removeItem('sessionId')
   }
+
   // Function to generate customized HTML with styles
   const generateCustomizedHTML = (
     originalHTML: string,
@@ -318,6 +336,7 @@ export default function ExtractPage() {
       `<$1 style="${styleString}" `,
     )
   }
+
   const filteredComponents = useMemo(() => {
     if (!extractionData?.components) return []
 
@@ -373,6 +392,9 @@ export default function ExtractPage() {
   const startExtraction = () => {
     if (!url) return
 
+    // Save the URL to history
+    saveLink(url)
+
     // Reset state for a fresh extraction
     setSessionId('')
     setManualDebug('')
@@ -394,9 +416,6 @@ export default function ExtractPage() {
     // Submit the form to the /extract route
     setManualDebug(`[${new Date().toISOString()}] Starting extraction...`)
     fetcher.submit(formData, { method: 'post', action: '/extract' })
-
-    // Additional extraction logic from the first file
-    // ...
   }
 
   // Manual check status button
@@ -555,6 +574,7 @@ export default function ExtractPage() {
       }
     }
   }, [])
+
   // Functions for pagination
   const handleNextPage = () => {
     if (extractionData?.totalPages && page < extractionData.totalPages) {
@@ -578,15 +598,40 @@ export default function ExtractPage() {
           <div className='space-y-6'>
             <div className='space-y-4'>
               <div className='grid grid-cols-1 md:grid-cols-[1fr,auto] gap-2'>
-                <Input
-                  type='url'
-                  placeholder='Enter a URL to extract UI components'
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  disabled={isPolling}
-                  className='flex-1'
-                  required
-                />
+                <div className='relative'>
+                  <Input
+                    type='url'
+                    placeholder='Enter a URL to extract UI components'
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    onFocus={() => setShowSavedLinks(true)}
+                    onBlur={() =>
+                      setTimeout(() => setShowSavedLinks(false), 200)
+                    }
+                    disabled={isPolling}
+                    className='flex-1 pl-10'
+                    required
+                  />
+                  <Chrome className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+
+                  {showSavedLinks && savedLinks.length > 0 && (
+                    <div className='absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 py-1'>
+                      {savedLinks.map((link, index) => (
+                        <div
+                          key={index}
+                          className='px-4 py-2 hover:bg-gray-100 cursor-pointer flex items-center'
+                          onClick={() => {
+                            setUrl(link)
+                            setShowSavedLinks(false)
+                          }}
+                        >
+                          <Chrome className='h-4 w-4 mr-2 text-gray-500' />
+                          <span className='truncate'>{link}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <Button
                   onClick={() => {
                     clearStoredData()
@@ -633,7 +678,7 @@ export default function ExtractPage() {
                 </Button>
 
                 {selectedTypes.length > 0 && (
-                  <div className='grid grid-cols-2 md:grid-cols-4 gap-2 mt-2'>
+                  <div className='grid grid-cols-2 md-grid-cols-4 gap-2 mt-2'>
                     {COMPONENT_TYPES.map((type) => (
                       <div
                         key={type.id}
@@ -699,90 +744,7 @@ export default function ExtractPage() {
               </div>
             )}
 
-            {/* Show extracted components */}
-            {extractionData?.components &&
-            extractionData.components.length > 0 ? (
-              <div className='mt-4'>
-                <div className='flex justify-between items-center mb-4'>
-                  <h3 className='text-lg font-medium'>
-                    Extracted Components ({extractionData.componentsFound || 0})
-                  </h3>
-
-                  {/* Pagination (top) */}
-                  {extractionData.totalPages &&
-                    extractionData.totalPages > 1 && (
-                      <div className='flex items-center gap-2'>
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          onClick={handlePrevPage}
-                          disabled={page === 1}
-                        >
-                          <ChevronLeft className='h-4 w-4' />
-                        </Button>
-                        <span className='text-sm'>
-                          Page {page} of {extractionData.totalPages}
-                        </span>
-                        <Button
-                          variant='outline'
-                          size='sm'
-                          onClick={handleNextPage}
-                          disabled={page === extractionData.totalPages}
-                        >
-                          <ChevronRight className='h-4 w-4' />
-                        </Button>
-                      </div>
-                    )}
-                </div>
-
-                <div className='space-y-4'>
-                  {filteredComponents.map((component, index) => (
-                    <ComponentPreview
-                      key={`${component.type}-${index}`}
-                      component={component}
-                    />
-                  ))}
-                </div>
-
-                {/* Pagination (bottom) */}
-                {extractionData.totalPages && extractionData.totalPages > 1 && (
-                  <div className='flex justify-center mt-6'>
-                    <div className='flex items-center gap-2'>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        onClick={handlePrevPage}
-                        disabled={page === 1}
-                      >
-                        <ChevronLeft className='h-4 w-4 mr-1' /> Previous
-                      </Button>
-                      <span className='mx-4 text-sm'>
-                        Page {page} of {extractionData.totalPages}
-                      </span>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        onClick={handleNextPage}
-                        disabled={page === extractionData.totalPages}
-                      >
-                        Next <ChevronRight className='h-4 w-4 ml-1' />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : !isPolling &&
-              extractionData?.status !== 'pending' &&
-              extractionData?.status !== 'processing' ? (
-              <div className='py-8 text-center'>
-                <p className='text-muted-foreground'>
-                  Enter a URL and click "Extract Components" to analyze a
-                  website.
-                </p>
-              </div>
-            ) : null}
-
-            {/* Navigation buttons to other pages - keeping from first file */}
+            {/* Navigation buttons to other pages */}
             {extractionData?.components &&
               extractionData.components.length > 0 && (
                 <div className='flex justify-end space-x-2 mt-6'>
@@ -803,6 +765,30 @@ export default function ExtractPage() {
                   </Button>
                 </div>
               )}
+
+            {/* Show extracted components */}
+            {extractionData?.components &&
+            extractionData.components.length > 0 ? (
+              <div className='mt-4'>
+                <div className='space-y-4'>
+                  {filteredComponents.map((component, index) => (
+                    <ComponentPreview
+                      key={`${component.type}-${index}`}
+                      component={component}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : !isPolling &&
+              extractionData?.status !== 'pending' &&
+              extractionData?.status !== 'processing' ? (
+              <div className='py-8 text-center'>
+                <p className='text-muted-foreground'>
+                  Enter a URL and click "Extract Components" to analyze a
+                  website.
+                </p>
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
