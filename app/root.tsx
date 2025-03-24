@@ -10,9 +10,7 @@ import type { LinksFunction } from '@remix-run/node'
 
 import styles from './tailwind.css?url'
 
-export const links: LinksFunction = () => [
-  { rel: 'stylesheet', href: styles }
-]
+export const links: LinksFunction = () => [{ rel: 'stylesheet', href: styles }]
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
