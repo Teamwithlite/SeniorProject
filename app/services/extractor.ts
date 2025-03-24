@@ -1,226 +1,136 @@
 // app/services/extractor.ts
-import puppeteer, { Page, ElementHandle, BoundingBox } from 'puppeteer'
-import type {
-  ExtractedComponent,
-  ComponentStyle,
-  ExtractedImageInfo,
-} from '~/types'
+import puppeteer from 'puppeteer'
 
 /**
- * Enhanced HTML cleaning function to remove unwanted elements and attributes.
- * This makes the extracted HTML cleaner and more suitable for reuse.
+ * Clean HTML while preserving necessary styles and structure
  */
-const cleanHTML = (html: string): string => {
+const cleanHTML = (html: string | undefined): string => {
+  // Add safety check to prevent the error
+  if (!html) return ''
+
   return (
     html
-      // Remove script tags and their content
+      // Remove script tags but preserve style tags
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      // Remove style tags and their content
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-      // Remove comments
-      .replace(/<!--[\s\S]*?-->/g, '')
-      // Remove event handlers (onclick, onmouseover, etc.)
-      .replace(/ on\w+="[^"]*"/g, '')
-      // Remove data-* attributes to reduce clutter
-      .replace(/ data-[^=]*="[^"]*"/g, '')
-      // Remove common tracking attributes
-      .replace(/ (ga|gtm|analytics)-[^=]*="[^"]*"/g, '')
-      // Simplify extremely long class strings
-      .replace(/class="([^"]{100,})"/gi, (match, classStr) => {
-        const importantClasses = classStr.split(/\s+/).slice(0, 10).join(' ')
-        return `class="${importantClasses}"`
-      })
   )
 }
 
-// Priority-based component selectors - enhanced and categorized
-const COMPONENT_SELECTORS: Array<{
+// Import our custom types from types.ts
+import type { TagCounts, ExtractedComponent, ExtractedImageInfo } from '~/types'
+
+// Define interface for component selectors
+interface ComponentSelector {
   type: string
   selector: string
   priority: number
-  isHighValue?: boolean // Flag for visually important components
-}> = [
+  excludeSelector?: string
+  metadata?: {
+    patternIndex: number
+    containerSelector: string
+    childCount: number
+  }
+}
+
+// Base selectors that work across different websites
+const COMPONENT_SELECTORS: ComponentSelector[] = [
   {
-    type: 'hero',
+    type: 'buttons',
     selector:
-      '[class*="hero"], .jumbotron, .banner, section:first-of-type, [class*="banner"], .splash, [class*="showcase"], [class*="intro"], [class*="masthead"]',
+      'button:not([aria-hidden="true"]), [role="button"], a.button, .btn, [class*="btn-"]',
     priority: 1,
-    isHighValue: true,
-  },
-  {
-    type: 'carousel',
-    selector:
-      '.carousel, .slider, .slideshow, [class*="carousel"], [class*="slider"], [class*="slideshow"], [class*="swiper"], .owl-carousel',
-    priority: 1,
-    isHighValue: true,
-  },
-  {
-    type: 'feature-section',
-    selector:
-      '.features, [class*="feature"], section.row, .benefits, [class*="benefit"], .highlights, [class*="highlight"]',
-    priority: 2,
-    isHighValue: true,
-  },
-  {
-    type: 'cta-section',
-    selector:
-      '.cta, [class*="cta"], [class*="call-to-action"], [class*="calltoaction"], [class*="call-to-action"]',
-    priority: 2,
-    isHighValue: true,
-  },
-  {
-    type: 'product',
-    selector:
-      '.product, .item, [class*="product"], [class*="product-item"], [itemtype*="Product"]',
-    priority: 2,
-    isHighValue: true,
-  },
-  {
-    type: 'testimonial',
-    selector:
-      '.testimonial, [class*="testimonial"], .review, [class*="review"], .quote, [class*="quote"]',
-    priority: 3,
-    isHighValue: true,
-  },
-  {
-    type: 'image-gallery',
-    selector:
-      '.gallery, [class*="gallery"], .album, [class*="album"], .images, [class*="images"]',
-    priority: 2,
-    isHighValue: true,
-  },
-  {
-    type: 'rich-media',
-    selector:
-      'video, [class*="video"], iframe, [class*="media"], [class*="player"], .media',
-    priority: 2,
-    isHighValue: true,
-  },
-  {
-    type: 'headers',
-    selector:
-      'header, .header, [role="banner"], [class*="header"], .page-header',
-    priority: 2,
+    excludeSelector: 'nav, header, footer', // Exclude buttons inside these containers
   },
   {
     type: 'navigation',
     selector:
-      'nav, [role="navigation"], header ul, .navbar, .menu, .nav, .navigation',
+      'nav, [role="navigation"], header > ul, .navbar, .nav-menu, .menu-container',
     priority: 2,
+    excludeSelector: 'footer nav', // Don't select navigation inside footers
   },
   {
     type: 'cards',
-    selector: '.card, [class*="card"], article, .article, .item, .product',
+    selector: '.card, [class*="card"], [class*="product-card"], article',
     priority: 3,
-  },
-  {
-    type: 'images',
-    selector:
-      'img[src], svg, [class*="image"], [class*="img"], figure, .figure, picture',
-    priority: 3,
-    isHighValue: true,
-  },
-  {
-    type: 'buttons',
-    selector:
-      'button, .btn, [role="button"], a.button, [class*="btn"], [class*="button"]:not(a[class*="button-link"]), ' +
-      'input[type="button"], input[type="submit"], input[type="reset"], ' +
-      '[onclick]:not(a), [class*="cta"], .submit, [class*="submit-btn"], ' +
-      'div[class*="button"], div[role="button"], span[class*="button"], span[role="button"], ' +
-      '[class*="btn-"]:not(a[class*="btn-link"]), [class*="button-"]:not(a[class*="button-link"]), ' +
-      'a[href][class*="primary"], a[href][class*="secondary"], a[href][class*="action"], ' +
-      'div[tabindex="0"][class*="clickable"], span[tabindex="0"][class*="clickable"]',
-    priority: 3, // Increased priority to ensure buttons are captured
-    isHighValue: true, // Mark buttons as high value components
   },
   {
     type: 'forms',
-    selector: 'form, .form, [role="form"], fieldset',
+    selector: 'form, .form, [class*="form-container"]',
     priority: 3,
   },
   {
+    type: 'headers',
+    selector: 'header',
+    priority: 2,
+  },
+  {
     type: 'footers',
-    selector: 'footer, .footer, [role="contentinfo"], [class*="footer"]',
+    selector: 'footer',
     priority: 4,
   },
   {
-    type: 'modals',
+    type: 'hero',
+    selector: '.hero, .banner, .jumbotron, .showcase, [class*="hero-"]',
+    priority: 2,
+  },
+  // Pattern-based selectors that work across different websites
+  {
+    type: 'card-grid',
     selector:
-      '[role="dialog"], .modal, .popup, .dialog, [class*="modal"], [class*="popup"], [class*="dialog"]',
+      'div[class*="grid"] > *, ul > li, [class*="card-list"] > *, [class*="products"] > *',
+    priority: 2,
+    excludeSelector: 'nav, header, footer',
+  },
+  {
+    type: 'item-card',
+    selector:
+      'a:has(img), div:has(> img + *), div:has(> picture + *), div:has(> figure + *)',
+    priority: 3,
+    excludeSelector: 'nav, header, footer',
+  },
+  {
+    type: 'product-item',
+    selector:
+      '[class*="product"], [class*="item"], [id*="product"], [id*="item"]',
+    priority: 3,
+  },
+  {
+    type: 'image-with-caption',
+    selector:
+      'figure, picture, div:has(> img + div), div:has(> img + span), div:has(> img + p)',
     priority: 4,
-  },
-  {
-    type: 'text',
-    selector:
-      'p, h1, h2, h3, h4, h5, h6, span, div > span:only-child, .text, [class*="text"]',
-    priority: 5,
-  },
-  {
-    type: 'links',
-    selector:
-      'a:not([role="button"]):not([class*="btn"]):not([class*="button"]), .link, [class*="link"]',
-    priority: 5,
-  },
-  {
-    type: 'lists',
-    selector: 'ul, ol, dl, .list, [class*="list"]',
-    priority: 5,
-  },
-  {
-    type: 'inputs',
-    selector:
-      'input, textarea, select, .input-group, [class*="input"], [class*="field"], .field, label + input',
-    priority: 4,
-  },
-  {
-    type: 'tables',
-    selector: 'table, .table, [class*="table"], [role="table"], .grid',
-    priority: 4,
-  },
-  {
-    type: 'dividers',
-    selector:
-      'hr, [class*="divider"], .separator, [class*="separator"], [role="separator"]',
-    priority: 6,
-  },
-  {
-    type: 'badges',
-    selector:
-      '[class*="badge"], .tag, [class*="tag"], .pill, [class*="pill"], .status',
-    priority: 6,
-  },
-  {
-    type: 'tooltips',
-    selector:
-      '[data-tooltip], [class*="tooltip"], [role="tooltip"], [aria-describedby]',
-    priority: 6,
-  },
-  {
-    type: 'icons',
-    selector:
-      'i[class*="icon"], svg[class*="icon"], [class*="icon"], .fa, .material-icons',
-    priority: 6,
-  },
-  {
-    type: 'alerts',
-    selector:
-      '.alert, [role="alert"], [class*="alert"], .notification, [class*="notification"]',
-    priority: 4,
-  },
-  {
-    type: 'toggles',
-    selector:
-      '.toggle, [class*="toggle"], .switch, [class*="switch"], [role="switch"]',
-    priority: 5,
-  },
-  {
-    type: 'progress',
-    selector: 'progress, .progress, [role="progressbar"], [class*="progress"]',
-    priority: 5,
   },
 ]
 
-// Simple in-memory cache to avoid repeated extraction
+// Generate a more accurate hash for component deduplication
+const generateComponentHash = (
+  component: Partial<ExtractedComponent>,
+): string => {
+  // Adding safety checks for undefined values
+  const type = component.type || ''
+  const html = component.html || ''
+
+  // Create a simplified representation focusing on content fingerprint
+  const hashContent = {
+    type: type,
+    structural: html
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .replace(/class="[^"]*"/gi, '') // Remove class attributes
+      .replace(/id="[^"]*"/gi, '') // Remove id attributes
+      .replace(/style="[^"]*"/gi, '') // Remove inline styles for comparison
+      .trim(),
+    dimensions: component.metadata?.dimensions
+      ? `${Math.round((component.metadata.dimensions.width || 0) / 10)}x${Math.round((component.metadata.dimensions.height || 0) / 10)}`
+      : null,
+    text:
+      html
+        .match(/>([^<]{3,50})</g)
+        ?.slice(0, 3)
+        .join('') || '',
+  }
+  return JSON.stringify(hashContent)
+}
+
+// Enhanced cache with better expiration strategy
 const componentCache = new Map<
   string,
   { timestamp: number; components: ExtractedComponent[] }
@@ -228,564 +138,7 @@ const componentCache = new Map<
 const CACHE_EXPIRY = 60 * 60 * 1000 // 1 hour
 
 /**
- * Calculate the importance score of an element based on various factors
- * This helps prioritize visually and structurally important components
- */
-const calculateImportanceScore = async (
-  page: Page,
-  element: ElementHandle<Element>,
-  rect: BoundingBox,
-  tagName: string,
-  isHighValueType: boolean = false,
-): Promise<number> => {
-  // Get viewport dimensions
-  const viewport = page.viewport()
-  if (!viewport) return 0
-
-  // Base score starts at 0
-  let score = 0
-
-  // Element is in the first screenful of content (above the fold)
-  // Score increases the closer to the top it is
-  const viewportScore = Math.max(0, 1 - rect.y / viewport.height)
-  score += viewportScore * 20 // Up to 20 points for position
-
-  // Size relative to viewport is an important factor
-  // Larger elements (especially width) tend to be more important
-  const sizeScore =
-    (rect.width * rect.height) / (viewport.width * viewport.height)
-  score += sizeScore * 30 // Up to 30 points for size
-
-  // Elements with images get a boost
-  const hasImages = await page.evaluate((el: Element) => {
-    return (
-      !!el.querySelector('img') ||
-      window.getComputedStyle(el).backgroundImage !== 'none'
-    )
-  }, element)
-
-  if (hasImages) {
-    score += 15 // 15 points for having images
-  }
-
-  // Check text content richness
-  const textScore = await page.evaluate((el: Element) => {
-    const text = el.textContent || ''
-    // More text generally means more importance (up to a point)
-    return Math.min(1, text.length / 500)
-  }, element)
-
-  score += textScore * 10 // Up to 10 points for text content
-
-  // Check if element is a heading or contains headings
-  const hasHeadings = await page.evaluate((el: Element) => {
-    return el.tagName.match(/^H[1-3]$/) || !!el.querySelector('h1, h2, h3')
-  }, element)
-
-  if (hasHeadings) {
-    score += 15 // 15 points for headings
-  }
-
-  // Special case for elements with specific tags
-  if (['header', 'section', 'article', 'main', 'nav'].includes(tagName)) {
-    score += 10 // 10 points for semantically important tags
-  }
-
-  // Pre-defined high-value components get a boost
-  if (isHighValueType) {
-    score += 20
-  }
-
-  return Math.min(100, score) // Cap at 100
-}
-
-/**
- * Check if an element has a background image or gradient
- */
-const getBackgroundImageInfo = async (
-  page: Page,
-  element: ElementHandle<Element>,
-): Promise<{ hasBackground: boolean; backgroundUrl?: string }> => {
-  return page.evaluate((el: Element) => {
-    const style = window.getComputedStyle(el)
-    const backgroundImage = style.backgroundImage
-
-    if (backgroundImage && backgroundImage !== 'none') {
-      // Extract URL if it's an image
-      const urlMatch = backgroundImage.match(/url\(['"]?(.*?)['"]?\)/)
-      if (urlMatch && urlMatch[1]) {
-        return {
-          hasBackground: true,
-          backgroundUrl: urlMatch[1],
-        }
-      }
-
-      // It's a gradient or other background
-      return { hasBackground: true }
-    }
-
-    return { hasBackground: false }
-  }, element)
-}
-
-/**
- * Extract all relevant CSS properties for consistent style extraction
- */
-const extractStyles = async (
-  page: Page,
-  element: ElementHandle<Element>,
-): Promise<ComponentStyle> => {
-  return page.evaluate((el: Element) => {
-    const computed = window.getComputedStyle(el)
-    const styleObj: Record<string, string> = {}
-
-    // Capture all important style properties
-    ;[
-      // Typography styles
-      'color',
-      'backgroundColor',
-      'fontSize',
-      'fontFamily',
-      'fontWeight',
-      'lineHeight',
-      'textAlign',
-      'textTransform',
-      'letterSpacing',
-
-      // Spacing and sizing
-      'padding',
-      'paddingTop',
-      'paddingRight',
-      'paddingBottom',
-      'paddingLeft',
-      'margin',
-      'marginTop',
-      'marginRight',
-      'marginBottom',
-      'marginLeft',
-      'width',
-      'height',
-      'minWidth',
-      'maxWidth',
-      'minHeight',
-      'maxHeight',
-
-      // Borders and shadows
-      'borderRadius',
-      'border',
-      'borderTop',
-      'borderRight',
-      'borderBottom',
-      'borderLeft',
-      'boxShadow',
-      'outline',
-      'outlineOffset',
-
-      // Layout properties
-      'display',
-      'flexDirection',
-      'justifyContent',
-      'alignItems',
-      'gap',
-      'position',
-      'top',
-      'right',
-      'bottom',
-      'left',
-      'zIndex',
-
-      // Visual effects
-      'opacity',
-      'transform',
-      'transition',
-      'animation',
-      'filter',
-      'backgroundImage',
-      'backgroundSize',
-      'backgroundPosition',
-      'backgroundRepeat',
-      'backgroundBlendMode',
-    ].forEach((prop) => {
-      styleObj[prop] = computed.getPropertyValue(prop)
-    })
-
-    return styleObj as ComponentStyle
-  }, element)
-}
-
-/**
- * Generate HTML with inline styles for component extraction
- */
-const generateHTMLWithStyles = async (
-  page: Page,
-  element: ElementHandle<Element>,
-): Promise<string> => {
-  return page.evaluate((el: Element) => {
-    // Get computed styles
-    const computed = window.getComputedStyle(el)
-
-    // Create inline style string with most important properties
-    let styleStr = ''
-    for (const prop of [
-      'color',
-      'background-color',
-      'background-image',
-      'background-size',
-      'background-position',
-      'font-size',
-      'font-weight',
-      'font-family',
-      'padding',
-      'margin',
-      'border',
-      'border-radius',
-      'display',
-      'width',
-      'height',
-      'flex-direction',
-      'justify-content',
-      'align-items',
-      'box-shadow',
-      'position',
-    ]) {
-      const value = computed.getPropertyValue(prop)
-      if (value && value !== 'none' && value !== 'normal') {
-        styleStr += `${prop}: ${value}; `
-      }
-    }
-
-    // Clone element and add inline styles
-    const clone = el.cloneNode(true) as HTMLElement
-    clone.setAttribute('style', styleStr + (clone.getAttribute('style') || ''))
-
-    // Preserve src attributes for images
-    const images = clone.querySelectorAll('img')
-    images.forEach((img) => {
-      const src = img.getAttribute('src')
-      if (src && src.startsWith('data:')) {
-        // Already a data URL, leave it
-      } else if (src) {
-        // For regular src, make sure it's absolute
-        try {
-          img.setAttribute('src', new URL(src, window.location.href).href)
-        } catch (e) {
-          // Keep original if URL parsing fails
-        }
-      }
-    })
-
-    return clone.outerHTML
-  }, element)
-}
-
-/**
- * Extract image source URLs and metadata from an element
- */
-const extractImages = async (
-  page: Page,
-  element: ElementHandle<Element>,
-): Promise<
-  Array<{
-    src: string
-    alt?: string
-    width?: number
-    height?: number
-    type: string
-  }>
-> => {
-  return page.evaluate((el: Element) => {
-    const images: Array<{
-      src: string
-      alt?: string
-      width?: number
-      height?: number
-      type: string
-    }> = []
-
-    // Extract regular images
-    const imgElements = el.querySelectorAll('img')
-    imgElements.forEach((img) => {
-      const src = img.getAttribute('src')
-      if (src) {
-        images.push({
-          src: src,
-          alt: img.getAttribute('alt') || undefined,
-          width: img.naturalWidth || undefined,
-          height: img.naturalHeight || undefined,
-          type: 'img',
-        })
-      }
-    })
-
-    // Extract background images from this element and descendants
-    const elementsWithBg = [el, ...Array.from(el.querySelectorAll('*'))]
-    elementsWithBg.forEach((bgEl) => {
-      const style = window.getComputedStyle(bgEl)
-      const bgImage = style.backgroundImage
-
-      if (bgImage && bgImage !== 'none') {
-        const urlMatch = bgImage.match(/url\(['"]?(.*?)['"]?\)/)
-        if (urlMatch && urlMatch[1]) {
-          const rect = bgEl.getBoundingClientRect()
-          images.push({
-            src: urlMatch[1],
-            width: rect.width || undefined,
-            height: rect.height || undefined,
-            type: 'background',
-          })
-        }
-      }
-    })
-
-    return images
-  }, element)
-}
-
-/**
- * Process a DOM element and extract component information
- */
-const processElement = async (
-  page: Page,
-  element: ElementHandle<Element>,
-  type: string,
-  options: {
-    skipScreenshots?: boolean
-    scoringEnabled?: boolean
-    isHighValueType?: boolean
-  } = {},
-): Promise<ExtractedComponent | null> => {
-  try {
-    // Check if element is visible and has reasonable dimensions
-    const rect = await element.boundingBox().catch(() => null)
-    if (!rect || rect.width < 10 || rect.height < 10) {
-      return null
-    }
-
-    // Check if element is fixed position (often overlays)
-    const position = await page.evaluate(
-      (el: Element) => window.getComputedStyle(el).position,
-      element,
-    )
-
-    if (position === 'fixed') {
-      return null
-    }
-
-    // Get tag name
-    const tagName = await page.evaluate(
-      (el: Element) => el.tagName.toLowerCase(),
-      element,
-    )
-
-    // Calculate importance score if scoring is enabled
-    let importanceScore = 0
-    if (options.scoringEnabled) {
-      importanceScore = await calculateImportanceScore(
-        page,
-        element,
-        rect,
-        tagName,
-        options.isHighValueType,
-      )
-    }
-
-    // Check for background images
-    const backgroundInfo = await getBackgroundImageInfo(page, element)
-
-    // Extract all images from this component
-    const images = await extractImages(page, element)
-
-    // Extract styles
-    const styles = await extractStyles(page, element)
-
-    // Get HTML with inlined styles
-    const htmlWithStyles = await generateHTMLWithStyles(page, element)
-
-    // Extract text content for naming
-    const textContent = await page.evaluate((el: Element) => {
-      const text = el.textContent?.trim() || ''
-      return text.length > 25 ? text.slice(0, 25) + '...' : text
-    }, element)
-
-    // Enhanced component type detection with better button identification
-    let detectedType = type
-
-    if (!detectedType) {
-      // Check if it's a button-like element by examining properties
-      const isButtonLike = await page.evaluate((el) => {
-        const tag = el.tagName.toLowerCase()
-        const classList = Array.from(el.classList).join(' ').toLowerCase()
-        const role = el.getAttribute('role')
-        const hasOnclick = el.hasAttribute('onclick')
-        const isInput =
-          tag === 'input' &&
-          ['button', 'submit', 'reset'].includes(el.getAttribute('type') || '')
-        const hasButtonClass = /btn|button|cta|submit|action/i.test(classList)
-        const hasInteractionAttrs =
-          el.hasAttribute('tabindex') || el.hasAttribute('aria-pressed')
-        const textContent = el.textContent?.trim() || ''
-        const isShortActionText =
-          /submit|send|login|signup|sign up|sign in|continue|next|previous|save|delete|cancel|apply|try|get|buy|add|more/i.test(
-            textContent,
-          ) && textContent.length < 30
-
-        return (
-          tag === 'button' ||
-          role === 'button' ||
-          isInput ||
-          hasButtonClass ||
-          (hasOnclick && (tag === 'div' || tag === 'span')) ||
-          (hasInteractionAttrs && isShortActionText)
-        )
-      }, element)
-
-      if (isButtonLike) {
-        detectedType = 'buttons'
-      } else if (tagName === 'a') {
-        detectedType = 'links'
-      } else if (tagName === 'img' || backgroundInfo.hasBackground) {
-        detectedType = 'images'
-      } else {
-        detectedType = 'element'
-      }
-    }
-
-    // Create display name with more context
-    let displayName = ''
-    if (importanceScore > 75) {
-      displayName = `Important ${detectedType.charAt(0).toUpperCase() + detectedType.slice(1)}`
-      if (textContent) displayName += `: ${textContent}`
-    } else {
-      displayName = textContent
-        ? `${detectedType.charAt(0).toUpperCase() + detectedType.slice(1)}: ${textContent}`
-        : `${detectedType.charAt(0).toUpperCase() + detectedType.slice(1)} Component`
-    }
-
-    // Take screenshot if enabled
-    let screenshot = ''
-    if (!options.skipScreenshots) {
-      try {
-        const screenshotBuffer = await element.screenshot({
-          encoding: 'base64',
-        })
-        screenshot = `data:image/png;base64,${screenshotBuffer}`
-      } catch (err) {
-        console.error('Screenshot failed:', err)
-      }
-    }
-
-    // Get classes
-    const classes = await page.evaluate(
-      (el: Element) => Array.from(el.classList),
-      element,
-    )
-
-    // Return extracted component with enhanced metadata
-    return {
-      type: detectedType,
-      name: displayName,
-      html: htmlWithStyles,
-      cleanHtml: cleanHTML(htmlWithStyles),
-      screenshot,
-      styles,
-      metadata: {
-        tagName,
-        classes,
-        dimensions: {
-          width: rect.width,
-          height: rect.height,
-        },
-        importanceScore,
-        hasBackgroundImage: backgroundInfo.hasBackground,
-        backgroundImageUrl: backgroundInfo.backgroundUrl,
-        imageCount: images.length,
-        images: images,
-        position: {
-          x: rect.x,
-          y: rect.y,
-        },
-      },
-    }
-  } catch (error) {
-    console.error('Error processing element:', error)
-    return null
-  }
-}
-
-/**
- * Process an element and its children recursively to find nested components
- */
-const processElementRecursively = async (
-  page: Page,
-  element: ElementHandle<Element>,
-  options: {
-    depth?: number
-    maxDepth?: number
-    skipScreenshots?: boolean
-    results: ExtractedComponent[]
-    maxComponents: number
-    scoringEnabled?: boolean
-  },
-): Promise<void> => {
-  const {
-    depth = 0,
-    maxDepth = 3, // Increased depth for more thorough analysis
-    skipScreenshots = false,
-    results,
-    maxComponents,
-    scoringEnabled = true,
-  } = options
-
-  if (depth > maxDepth || results.length >= maxComponents) return
-
-  try {
-    // Process the element itself
-    const component = await processElement(page, element, '', {
-      skipScreenshots,
-      scoringEnabled,
-    })
-
-    if (component && results.length < maxComponents) {
-      // Only add if it has reasonable content or is visually distinct
-      const hasSubstantialContent =
-        component.metadata?.imageCount && component.metadata.imageCount > 0
-      const hasBackgroundImage = component.metadata?.hasBackgroundImage
-      const isImportant =
-        component.metadata?.importanceScore &&
-        component.metadata.importanceScore > 40
-
-      if (hasSubstantialContent || hasBackgroundImage || isImportant) {
-        results.push(component)
-      }
-    }
-
-    // Process children recursively, but fewer levels for less important elements
-    if (depth < maxDepth && results.length < maxComponents) {
-      // If this is an important element, process children more extensively
-      const isImportant =
-        component?.metadata?.importanceScore &&
-        component.metadata.importanceScore > 60
-      const childDepthLimit = isImportant
-        ? maxDepth
-        : Math.min(maxDepth, depth + 2)
-
-      const children = await element.$$(':scope > *')
-      for (const child of children) {
-        await processElementRecursively(page, child, {
-          ...options,
-          depth: depth + 1,
-          maxDepth: childDepthLimit,
-        })
-        await child.dispose()
-      }
-    }
-  } catch (error) {
-    console.error('Error in recursive processing:', error)
-  }
-}
-
-/**
- * Extract UI components from a given URL using Puppeteer.
+ * Extract UI components from a given URL with a pattern-based approach
  */
 export async function extractWebsite(
   url: string,
@@ -793,30 +146,13 @@ export async function extractWebsite(
     maxComponents?: number
     componentTypes?: string[]
     skipScreenshots?: boolean
-    maxDepth?: number
-    timeout?: number
-    allowImages?: boolean
-    extractMainContent?: boolean
-    dynamicScoring?: boolean
   } = {},
 ): Promise<{ components: ExtractedComponent[] }> {
   if (!url.startsWith('http')) {
     throw new Error('Invalid URL format. Must start with http or https.')
   }
 
-  // Set default options
-  const maxComponents = options.maxComponents || 50
-  const skipScreenshots = options.skipScreenshots || false
-  const maxDepth = options.maxDepth || 3 // Increased default depth
-  const TIMEOUT = options.timeout || 60000 // Default 60 seconds
-  const allowImages =
-    options.allowImages !== undefined ? options.allowImages : true // Default to allowing images
-  const extractMainContent =
-    options.extractMainContent !== undefined ? options.extractMainContent : true
-  const dynamicScoring =
-    options.dynamicScoring !== undefined ? options.dynamicScoring : true
-
-  // Check cache
+  // Check cache first
   const cacheKey = `${url}-${JSON.stringify(options)}`
   const cached = componentCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY) {
@@ -826,7 +162,6 @@ export async function extractWebsite(
 
   let browser
   try {
-    // Launch browser with appropriate settings
     browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -841,205 +176,981 @@ export async function extractWebsite(
 
     const page = await browser.newPage()
 
-    // Set a reasonable timeout for the entire operation
+    // Set extraction timeout
+    const TIMEOUT = 90000 // 90 seconds - longer timeout for images to load
     const extractionTimeout = setTimeout(() => {
-      throw new Error(`Extraction timed out after ${TIMEOUT / 1000} seconds`)
+      throw new Error('Extraction timed out after 90 seconds')
     }, TIMEOUT)
 
     try {
-      // Optimize page loading by selectively blocking non-essential resources
+      // Allow CSS and images to load but block other heavy resources
       await page.setRequestInterception(true)
       page.on('request', (req) => {
         const resourceType = req.resourceType()
-        // Allow images if specified, always block media, fonts
-        if (!allowImages && resourceType === 'image') {
+        // Only block media and fonts, but allow images and stylesheets
+        if (['media', 'font'].includes(resourceType)) {
           req.abort()
-        } else if (['media', 'font'].includes(resourceType)) {
-          req.abort()
-        } else if (resourceType === 'stylesheet') {
-          // We need styles for proper component extraction
-          req.continue()
         } else {
+          // Allow images and other resources
           req.continue()
         }
       })
 
-      // Set user agent and viewport
       await page.setUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       )
+
+      // Set a higher viewport for better component visibility
       await page.setViewport({
         width: 1920,
         height: 1080,
         deviceScaleFactor: 1,
       })
 
-      // Navigate to page
+      // Inject our custom style preservation helpers
+      await page.evaluateOnNewDocument(() => {
+        // Helper to get computed styles for an element
+        window.getComputedStylesAsInline = (element) => {
+          try {
+            if (!element) return ''
+
+            const computedStyle = window.getComputedStyle(element)
+            if (!computedStyle) return ''
+
+            let inlineStyles = ''
+
+            // Comprehensive properties for accurate visual reproduction
+            const styleProperties = [
+              // Layout & Positioning
+              'display',
+              'position',
+              'float',
+              'clear',
+              'visibility',
+              'flex-direction',
+              'flex-wrap',
+              'flex-grow',
+              'flex-shrink',
+              'flex-basis',
+              'justify-content',
+              'align-items',
+              'align-content',
+              'align-self',
+              'grid-template-columns',
+              'grid-template-rows',
+              'grid-column',
+              'grid-row',
+
+              // Size constraints (critical for preventing stretching)
+              'width',
+              'min-width',
+              'max-width',
+              'height',
+              'min-height',
+              'max-height',
+
+              // Box model
+              'padding',
+              'padding-top',
+              'padding-right',
+              'padding-bottom',
+              'padding-left',
+              'margin',
+              'margin-top',
+              'margin-right',
+              'margin-bottom',
+              'margin-left',
+              'box-sizing',
+
+              // Borders and outlines
+              'border',
+              'border-width',
+              'border-style',
+              'border-color',
+              'border-top',
+              'border-right',
+              'border-bottom',
+              'border-left',
+              'border-radius',
+              'border-top-left-radius',
+              'border-top-right-radius',
+              'border-bottom-right-radius',
+              'border-bottom-left-radius',
+              'outline',
+              'outline-width',
+              'outline-style',
+              'outline-color',
+
+              // Colors & Backgrounds
+              'color',
+              'background',
+              'background-color',
+              'background-image',
+              'background-repeat',
+              'background-position',
+              'background-size',
+              'background-attachment',
+              'background-origin',
+              'background-clip',
+
+              // Typography
+              'font-family',
+              'font-size',
+              'font-weight',
+              'font-style',
+              'font-variant',
+              'text-align',
+              'text-decoration',
+              'text-transform',
+              'text-indent',
+              'line-height',
+              'letter-spacing',
+              'word-spacing',
+              'white-space',
+              'vertical-align',
+              'text-shadow',
+              'text-overflow',
+              'word-break',
+              'word-wrap',
+
+              // Visual effects
+              'opacity',
+              'box-shadow',
+              'transform',
+              'transform-origin',
+              'transition',
+              'animation',
+              'filter',
+              'backdrop-filter',
+
+              // Others
+              'z-index',
+              'overflow',
+              'overflow-x',
+              'overflow-y',
+              'cursor',
+              'pointer-events',
+              'user-select',
+            ]
+
+            // Apply only non-empty values
+            styleProperties.forEach((prop) => {
+              try {
+                const value = computedStyle.getPropertyValue(prop)
+                if (value && value !== '') {
+                  inlineStyles += `${prop}: ${value}; `
+                }
+              } catch (e) {
+                // Skip properties that cause errors
+              }
+            })
+
+            return inlineStyles
+          } catch (e) {
+            console.error('Error in getComputedStylesAsInline:', e)
+            return ''
+          }
+        }
+
+        // Create a function to extract external CSS with safety checks
+        window.getExternalStylesForElement = (element: Element) => {
+          try {
+            if (!element) return ''
+
+            // Get all the stylesheets in the document
+            const sheets = Array.from(document.styleSheets || [])
+            const relevantStyles: string[] = []
+
+            sheets.forEach((sheet) => {
+              try {
+                // Get all CSS rules from the stylesheet
+                const rules = Array.from(sheet.cssRules || sheet.rules || [])
+
+                rules.forEach((rule) => {
+                  if (rule.type === 1) {
+                    // CSSStyleRule
+                    const styleRule = rule
+                    // Check if this rule applies to our element
+                    try {
+                      if (
+                        element.matches &&
+                        element.matches(
+                          (styleRule as CSSStyleRule).selectorText,
+                        )
+                      ) {
+                        relevantStyles.push(rule.cssText)
+                      }
+                    } catch (e) {
+                      // Skip selectors that cause errors
+                    }
+                  }
+                })
+              } catch (e) {
+                // Skip cross-domain stylesheets
+                console.log('Could not access stylesheet rules')
+              }
+            })
+
+            return relevantStyles.join('\n')
+          } catch (e) {
+            console.error('Error extracting external styles:', e)
+            return ''
+          }
+        }
+
+        // Get document-level styles that might affect components
+        window.getBodyStyles = () => {
+          try {
+            const bodyStyles = window.getComputedStyle(document.body)
+            return {
+              backgroundColor: bodyStyles.backgroundColor || '#ffffff',
+              color: bodyStyles.color || '#000000',
+              fontFamily: bodyStyles.fontFamily || 'inherit',
+              fontSize: bodyStyles.fontSize || 'inherit',
+              lineHeight: bodyStyles.lineHeight || 'normal',
+            }
+          } catch (e) {
+            console.error('Error getting body styles:', e)
+            return {
+              backgroundColor: '#ffffff',
+              color: '#000000',
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+              lineHeight: 'normal',
+            }
+          }
+        }
+
+        // NEW: Pattern detection functions for repeated components
+        window.detectRepeatedPatterns = () => {
+          try {
+            // Find elements that are likely to be part of a collection
+            const patterns: Array<{
+              container: Element
+              containerSelector: string
+              childSelector: string
+              childTag: string
+              childCount: number
+              hasImages: boolean
+              hasText: boolean
+              sampleHtml: string
+            }> = []
+
+            // Look for grid layouts (CSS Grid or Flexbox)
+            const gridContainers = Array.from(
+              document.querySelectorAll('*'),
+            ).filter((el) => {
+              const style = window.getComputedStyle(el)
+              return (
+                style.display === 'grid' ||
+                style.display === 'flex' ||
+                el.className.includes('grid') ||
+                el.className.includes('list') ||
+                el.className.includes('cards')
+              )
+            })
+
+            gridContainers.forEach((container, idx) => {
+              // Get direct children that are similar in structure
+              const children = Array.from(container.children)
+
+              // Skip if too few children
+              if (children.length < 3) return
+
+              // Check if children have similar structure (similar tag names, similar dimensions)
+              const tagCounts: TagCounts = {}
+              children.forEach((child) => {
+                const tag = child.tagName.toLowerCase()
+                tagCounts[tag] = (tagCounts[tag] || 0) + 1
+              })
+
+              // Find the most common tag
+              let mostCommonTag = ''
+              let highestCount = 0
+              Object.entries(tagCounts).forEach(([tag, count]) => {
+                if (count > highestCount) {
+                  mostCommonTag = tag
+                  highestCount = count as number
+                }
+              })
+
+              // If most children have the same tag, this is probably a collection
+              if (highestCount >= children.length * 0.7) {
+                // This is likely a component collection
+
+                // Get a sample of child dimensions to check uniformity
+                const dimensions = children.slice(0, 5).map((child) => {
+                  const rect = child.getBoundingClientRect()
+                  return { width: rect.width, height: rect.height }
+                })
+
+                // Check if dimensions are similar
+                const averageWidth =
+                  dimensions.reduce((sum, dim) => sum + dim.width, 0) /
+                  dimensions.length
+                const averageHeight =
+                  dimensions.reduce((sum, dim) => sum + dim.height, 0) /
+                  dimensions.length
+
+                const similarDimensions = dimensions.every(
+                  (dim) =>
+                    Math.abs(dim.width - averageWidth) < averageWidth * 0.3 &&
+                    Math.abs(dim.height - averageHeight) < averageHeight * 0.3,
+                )
+
+                if (similarDimensions) {
+                  // These are repeating components of the same type
+                  patterns.push({
+                    container: container,
+                    containerSelector: getUniqueSelector(container),
+                    childSelector: `${getUniqueSelector(container)} > ${mostCommonTag}`,
+                    childTag: mostCommonTag,
+                    childCount: children.length,
+                    hasImages: children.some(
+                      (child) => child.querySelector('img') !== null,
+                    ),
+                    hasText: children.some(
+                      (child) => child.textContent?.trim().length > 0 || false,
+                    ),
+                    sampleHtml: children[0].outerHTML,
+                  })
+                }
+              }
+            })
+
+            // Detect lists and similar patterns
+            const lists = document.querySelectorAll('ul, ol, dl, [role="list"]')
+            lists.forEach((list) => {
+              const items = list.querySelectorAll(
+                'li, dt, dd, [role="listitem"]',
+              )
+              if (items.length >= 3) {
+                patterns.push({
+                  container: list,
+                  containerSelector: getUniqueSelector(list),
+                  childSelector: `${getUniqueSelector(list)} > li`,
+                  childTag: 'li',
+                  childCount: items.length,
+                  hasImages: Array.from(items).some(
+                    (item) => item.querySelector('img') !== null,
+                  ),
+                  hasText: Array.from(items).some(
+                    (item) => item.textContent?.trim().length > 0 || false,
+                  ),
+                  sampleHtml: items[0].outerHTML,
+                })
+              }
+            })
+
+            // Helper function to generate a reasonably unique selector
+            function getUniqueSelector(element: Element): string {
+              try {
+                // Start with the tag name
+                let selector = element.tagName.toLowerCase()
+
+                // Add id if it exists
+                if (element.id) {
+                  selector += `#${element.id}`
+                  return selector // ID should be unique enough
+                }
+
+                // Add classes
+                if (element.className) {
+                  const classes = element.className
+                    .split(/\s+/)
+                    .filter((c: string) => c)
+                  if (classes.length > 0) {
+                    selector += `.${classes.join('.')}`
+                  }
+                }
+
+                // If no ID or classes, use nth-child
+                if (
+                  selector === element.tagName.toLowerCase() &&
+                  element.parentNode
+                ) {
+                  const siblings = Array.from(element.parentNode.children)
+                  const index = siblings.indexOf(element) + 1
+                  selector += `:nth-child(${index})`
+                }
+
+                return selector
+              } catch (e) {
+                return element.tagName.toLowerCase()
+              }
+            }
+
+            return patterns
+          } catch (e) {
+            console.error('Error detecting patterns:', e)
+            return []
+          }
+        }
+      })
+
+      // Go to the page
       console.log(`Navigating to ${url}...`)
       await page.goto(url, {
-        waitUntil: 'domcontentloaded',
+        waitUntil: 'networkidle2', // Wait until network is mostly idle for better style loading
         timeout: 30000,
       })
 
-      // Wait for body and content to be ready
-      await page.waitForSelector('body', { timeout: 5000 }).catch(() => {
-        console.log('Body element not found, continuing anyway')
+      // Wait longer for page to render fully and images to load
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+
+      // Wait for images to load before taking screenshots
+      await page.evaluate(() => {
+        return new Promise((resolve) => {
+          // Wait for all images to load or 3 seconds, whichever comes first
+          const images = document.querySelectorAll('img')
+          let loaded = 0
+
+          if (images.length === 0) return resolve(void 0)
+
+          const imageTimeout = setTimeout(() => resolve(void 0), 3000)
+
+          images.forEach((img) => {
+            if (img.complete) {
+              loaded++
+              if (loaded === images.length) {
+                clearTimeout(imageTimeout)
+                resolve(void 0)
+              }
+            } else {
+              img.addEventListener('load', () => {
+                loaded++
+                if (loaded === images.length) {
+                  clearTimeout(imageTimeout)
+                  resolve(void 0)
+                }
+              })
+              img.addEventListener('error', () => {
+                loaded++
+                if (loaded === images.length) {
+                  clearTimeout(imageTimeout)
+                  resolve(void 0)
+                }
+              })
+            }
+          })
+        })
       })
 
-      // Wait a bit longer for images and dynamic content
-      // Use setTimeout with a Promise instead of waitForTimeout which may not be available
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // Get the page's base styles for context
+      const baseStyles = await page.evaluate(() => {
+        return window.getBodyStyles()
+      })
 
-      // Collection for results
+      // NEW: Detect repeated patterns on the page
+      const patterns = await page.evaluate(() => {
+        return window.detectRepeatedPatterns()
+      })
+
+      console.log(`Detected ${patterns.length} repeated component patterns`)
+
+      // Add dynamic selectors based on detected patterns
+      const dynamicSelectors = patterns.map((pattern, index) => ({
+        type: pattern.hasImages ? 'card-item' : 'list-item',
+        selector: pattern.childSelector,
+        priority: 2,
+        metadata: {
+          patternIndex: index,
+          containerSelector: pattern.containerSelector,
+          childCount: pattern.childCount,
+        },
+      }))
+
+      // Extract components
       const results: ExtractedComponent[] = []
+      const componentHashes = new Set<string>() // For deduplication
+      const maxComponents = options.maxComponents || 50
+      let componentCount = 0
 
-      // Filter or sort selectors by priority
-      let selectorsList = [...COMPONENT_SELECTORS]
+      // Filter selectors by requested component types
+      let selectorsList = [...COMPONENT_SELECTORS, ...dynamicSelectors]
       if (options.componentTypes?.length) {
         selectorsList = selectorsList.filter((item) =>
           options.componentTypes?.includes(item.type),
         )
       }
+      selectorsList.sort((a, b) => a.priority - b.priority)
 
-      // Sort by priority but prioritize high-value components
-      selectorsList.sort((a, b) => {
-        // First prioritize high-value components
-        if (a.isHighValue && !b.isHighValue) return -1
-        if (!a.isHighValue && b.isHighValue) return 1
-        // Then by priority
-        return a.priority - b.priority
-      })
+      // For each component type
+      for (const selectorInfo of selectorsList) {
+        if (componentCount >= maxComponents) break
 
-      // Extract components based on selectors
-      for (const { type, selector, isHighValue } of selectorsList) {
-        if (results.length >= maxComponents) break
+        // Use type assertion to handle property that might not exist on all union members
+        const { type, selector } = selectorInfo
+        const excludeSelector =
+          'excludeSelector' in selectorInfo
+            ? selectorInfo.excludeSelector
+            : undefined
         console.log(`Extracting ${type} using selector: ${selector}`)
 
         try {
-          const elementHandles = await page.$$(selector)
+          // Use more advanced selector to avoid duplicates
+          const fullSelector = excludeSelector
+            ? `${selector}:not(${excludeSelector})`
+            : selector
+
+          const elementHandles = await page.$$(fullSelector)
           console.log(
             `Found ${elementHandles.length} elements for type ${type}`,
           )
 
-          // Process in small batches to avoid memory issues
-          const batchSize = 5
+          // For patterns, limit the number of items to extract (to avoid too many duplicates)
+          const isPattern =
+            'metadata' in selectorInfo &&
+            selectorInfo.metadata?.patternIndex !== undefined
+          const maxItemsToExtract = isPattern
+            ? Math.min(10, elementHandles.length) // For patterns, limit to 10 items
+            : elementHandles.length
+
+          // Process each element to extract the component
           for (
             let i = 0;
-            i < elementHandles.length && results.length < maxComponents;
-            i += batchSize
+            i < maxItemsToExtract && componentCount < maxComponents;
+            i++
           ) {
-            const batch = elementHandles.slice(i, i + batchSize)
+            const element = elementHandles[i]
 
-            for (const element of batch) {
-              if (results.length >= maxComponents) break
-
-              const component = await processElement(page, element, type, {
-                skipScreenshots,
-                scoringEnabled: dynamicScoring,
-                isHighValueType: isHighValue,
-              })
-
-              if (component) {
-                results.push(component)
+            try {
+              // Check if element is visible and has reasonable dimensions
+              const rect = await element.boundingBox().catch(() => null)
+              if (!rect || rect.width < 20 || rect.height < 20) {
+                continue // Skip tiny elements
               }
+
+              // Skip fixed positioned elements (usually overlays)
+              const position = await page.evaluate((el) => {
+                try {
+                  return window.getComputedStyle(el).position
+                } catch (e) {
+                  return ''
+                }
+              }, element)
+
+              if (position === 'fixed') {
+                continue // Skip fixed positioned elements
+              }
+
+              // Take a screenshot for reference
+              let screenshot = ''
+              if (!options.skipScreenshots) {
+                try {
+                  const screenshotBuffer = await element.screenshot({
+                    encoding: 'base64',
+                    omitBackground: false, // Include background for better context
+                  })
+                  screenshot = `data:image/png;base64,${screenshotBuffer}`
+                } catch (err) {
+                  console.error('Screenshot failed:', err)
+                }
+              }
+
+              // Extract HTML with comprehensive style preservation
+              const result = await page.evaluate(
+                (el, type) => {
+                  try {
+                    // Function to clone an element with full style context
+                    function cloneElementWithStyles(element: Element): {
+                      html: string
+                      externalStyles: string
+                    } {
+                      try {
+                        // Safety check
+                        if (!element) return { html: '', externalStyles: '' }
+
+                        // Create a wrapper div for context
+                        const wrapper = document.createElement('div')
+                        wrapper.className = `extracted-component ${type}-component`
+
+                        // Set the wrapper's style to prevent stretching
+                        wrapper.style.cssText =
+                          'display:inline-block; width:auto; height:auto; position:relative; box-sizing:border-box;'
+
+                        // Function to recursively process an element and its children
+                        function processElement(sourceEl: Element): Node {
+                          try {
+                            if (!sourceEl) return document.createTextNode('')
+
+                            // Clone the element without children first
+                            const clone = sourceEl.cloneNode(false)
+
+                            // Special handling for images to ensure they load
+                            if (sourceEl.tagName === 'IMG') {
+                              // Make sure src is absolute
+                              const imgEl = sourceEl as HTMLImageElement
+                              const imgClone = clone as HTMLImageElement
+                              if (imgEl.src) {
+                                imgClone.src = imgEl.src
+                                // Store original dimensions as attributes
+                                if (imgEl.naturalWidth) {
+                                  imgClone.setAttribute(
+                                    'data-original-width',
+                                    imgEl.naturalWidth.toString(),
+                                  )
+                                }
+                                if (imgEl.naturalHeight) {
+                                  imgClone.setAttribute(
+                                    'data-original-height',
+                                    imgEl.naturalHeight.toString(),
+                                  )
+                                }
+                              }
+                            }
+
+                            // Handle background images in style
+                            const computedStyle =
+                              window.getComputedStyle(sourceEl)
+                            const backgroundImage =
+                              computedStyle.backgroundImage
+
+                            if (backgroundImage && backgroundImage !== 'none') {
+                              // Extract URL from background-image
+                              const urlMatch = backgroundImage.match(
+                                /url\(['"]?([^'"()]+)['"]?\)/,
+                              )
+                              if (urlMatch && urlMatch[1]) {
+                                // Store the background image URL as a data attribute
+                                clone.setAttribute(
+                                  'data-background-image',
+                                  urlMatch[1],
+                                )
+                              }
+                            }
+
+                            // Apply computed styles directly to maintain appearance
+                            const styles =
+                              window.getComputedStylesAsInline(sourceEl)
+                            if (styles) {
+                              if (clone instanceof HTMLElement) {
+                                clone.setAttribute(
+                                  'style',
+                                  (clone.getAttribute('style') || '') + styles,
+                                )
+                              }
+                            }
+
+                            // Make sure any fixed positioning becomes relative
+                            if (clone instanceof HTMLElement) {
+                              if (
+                                clone.style &&
+                                (clone.style.position === 'fixed' ||
+                                  clone.style.position === 'absolute')
+                              ) {
+                                clone.style.position = 'relative'
+                                clone.style.top = '0'
+                                clone.style.left = '0'
+                              }
+                            }
+
+                            // If this is the root element we're cloning, set explicit size constraints
+                            if (sourceEl === element) {
+                              try {
+                                const rect = sourceEl.getBoundingClientRect()
+                                if (rect) {
+                                  if (clone instanceof HTMLElement) {
+                                    clone.style.width = rect.width + 'px'
+                                    clone.style.height = rect.height + 'px'
+                                    clone.style.flexGrow = '0'
+                                    clone.style.flexShrink = '0'
+                                  }
+                                }
+                              } catch (e) {
+                                // Ignore dimension errors
+                              }
+                            }
+
+                            // Process all child nodes
+                            if (sourceEl.childNodes) {
+                              for (
+                                let i = 0;
+                                i < sourceEl.childNodes.length;
+                                i++
+                              ) {
+                                const child = sourceEl.childNodes[i]
+                                try {
+                                  if (child.nodeType === Node.ELEMENT_NODE) {
+                                    const processed = processElement(
+                                      child as Element,
+                                    )
+                                    if (processed) {
+                                      clone.appendChild(processed)
+                                    }
+                                  } else if (
+                                    child.nodeType === Node.TEXT_NODE
+                                  ) {
+                                    // Copy text nodes directly
+                                    clone.appendChild(child.cloneNode(true))
+                                  }
+                                } catch (childErr) {
+                                  // Skip problematic children
+                                }
+                              }
+                            }
+
+                            return clone
+                          } catch (err) {
+                            console.error('Process element error:', err)
+                            return document.createTextNode('')
+                          }
+                        }
+
+                        // Add extra CSS to ensure background images display properly
+                        const extraCSS = `
+                        .extracted-component [data-background-image] {
+                          background-image: url(attr(data-background-image)) !important;
+                          background-size: cover !important;
+                          background-position: center !important;
+                          background-repeat: no-repeat !important;
+                        }
+                      `
+
+                        // Start recursive processing from the target element
+                        try {
+                          const processed = processElement(element)
+                          if (processed) {
+                            wrapper.appendChild(processed)
+                          }
+
+                          // Add a style tag for handling background images
+                          const styleTag = document.createElement('style')
+                          styleTag.textContent = extraCSS
+                          wrapper.appendChild(styleTag)
+                        } catch (e) {
+                          console.error('Error appending processed element:', e)
+                        }
+
+                        // Extract any relevant external CSS
+                        let externalStyles = ''
+                        try {
+                          externalStyles =
+                            window.getExternalStylesForElement(element)
+                        } catch (e) {
+                          console.error('Error getting external styles:', e)
+                        }
+
+                        // Add a style tag if we found external styles
+                        if (externalStyles) {
+                          try {
+                            const styleTag = document.createElement('style')
+                            styleTag.textContent = externalStyles
+                            wrapper.appendChild(styleTag)
+                          } catch (e) {
+                            console.error('Error appending style tag:', e)
+                          }
+                        }
+
+                        return {
+                          html: wrapper.outerHTML || '',
+                          externalStyles: externalStyles || '',
+                        }
+                      } catch (e) {
+                        console.error('Clone element error:', e)
+                        return { html: '', externalStyles: '' }
+                      }
+                    }
+
+                    // Execute the cloning process with safety wrapping
+                    return cloneElementWithStyles(el)
+                  } catch (e) {
+                    console.error('Page evaluate error:', e)
+                    return { html: '', externalStyles: '' }
+                  }
+                },
+                element,
+                type,
+              )
+
+              // Safely extract values from the result
+              const htmlWithStyles = result && result.html ? result.html : ''
+              const externalStyles =
+                result && result.externalStyles ? result.externalStyles : ''
+
+              // Skip if no content was extracted
+              if (!htmlWithStyles) {
+                continue
+              }
+
+              // Get text content for naming
+              const textContent = await page.evaluate((el) => {
+                try {
+                  const text = el.textContent ? el.textContent.trim() : ''
+                  return text.length > 25 ? text.slice(0, 25) + '...' : text
+                } catch (e) {
+                  return ''
+                }
+              }, element)
+
+              // Get element metadata
+              const metadata = await page.evaluate((el) => {
+                try {
+                  const rect = el.getBoundingClientRect()
+                  return {
+                    tagName: el.tagName ? el.tagName.toLowerCase() : '',
+                    classes: el.classList ? Array.from(el.classList) : [],
+                    dimensions: {
+                      width: rect ? rect.width : 0,
+                      height: rect ? rect.height : 0,
+                    },
+                    originalStyles: {
+                      display: getComputedStyle(el).display || 'block',
+                      position: getComputedStyle(el).position || 'static',
+                      width: getComputedStyle(el).width || 'auto',
+                      height: getComputedStyle(el).height || 'auto',
+                    },
+                    // Check if this element has images
+                    hasImage: !!el.querySelector('img'),
+                    // Get link if it's a link or contains a link
+                    link:
+                      el.tagName === 'A' && 'href' in el
+                        ? (el as HTMLAnchorElement).href
+                        : el.querySelector('a')
+                          ? (el.querySelector('a') as HTMLAnchorElement).href
+                          : '',
+                    // If this is part of a pattern
+                    isRepeatedPattern: false,
+                  }
+                } catch (e) {
+                  return {
+                    tagName: '',
+                    classes: [],
+                    dimensions: { width: 0, height: 0 },
+                    originalStyles: {
+                      display: 'block',
+                      position: 'static',
+                      width: 'auto',
+                      height: 'auto',
+                    },
+                    hasImage: false,
+                    link: '',
+                    isRepeatedPattern: false,
+                  }
+                }
+              }, element)
+
+              // Enhance component type based on metadata
+              let enhancedType = type
+              if (metadata.hasImage && metadata.link) {
+                if (type === 'card-item' || type === 'item-card') {
+                  enhancedType = 'product-card'
+                } else if (type === 'grid-items') {
+                  enhancedType = 'gallery-item'
+                }
+              }
+
+              // Create a descriptive name
+              const displayName = textContent
+                ? `${enhancedType.charAt(0).toUpperCase() + enhancedType.slice(1)}: ${textContent}`
+                : `${enhancedType.charAt(0).toUpperCase() + enhancedType.slice(1)} Component`
+
+              // Extract essential styles and context information
+              const styles = await page.evaluate((el) => {
+                try {
+                  const computed = window.getComputedStyle(el)
+                  const result: Record<string, string> = {}
+
+                  // Extract key style properties
+                  ;[
+                    'backgroundColor',
+                    'color',
+                    'fontSize',
+                    'fontFamily',
+                    'fontWeight',
+                    'lineHeight',
+                    'textAlign',
+                    'padding',
+                    'margin',
+                    'borderRadius',
+                    'border',
+                    'boxShadow',
+                    'display',
+                    'width',
+                    'height',
+                    'position',
+                    'flexDirection',
+                    'justifyContent',
+                    'alignItems',
+                  ].forEach((prop) => {
+                    try {
+                      // Safe indexing with string key
+                      result[prop] = computed[prop as any] as string
+                    } catch (e) {
+                      // Skip problematic properties
+                    }
+                  })
+
+                  return result
+                } catch (e) {
+                  return {}
+                }
+              }, element)
+
+              // Create complete component with context info
+              const component: ExtractedComponent = {
+                type: enhancedType,
+                name: displayName,
+                html: htmlWithStyles,
+                cleanHtml: cleanHTML(htmlWithStyles),
+                screenshot,
+                styles: {
+                  ...styles,
+                  // Add contextual styling information
+                  _contextBackground: baseStyles.backgroundColor,
+                  _contextColor: baseStyles.color,
+                  _contextFontFamily: baseStyles.fontFamily,
+                  _contextFontSize: baseStyles.fontSize,
+                },
+                metadata: {
+                  ...metadata,
+                  externalStyles: externalStyles || '',
+                  sourcePage: url,
+                  extractedAt: new Date().toISOString(),
+                },
+              }
+
+              // Check for duplicates using enhanced hashing
+              const hash = generateComponentHash(component)
+              if (!componentHashes.has(hash)) {
+                componentHashes.add(hash)
+                results.push(component)
+                componentCount++
+              }
+            } catch (elementError) {
+              console.error(`Error processing element: ${elementError}`)
+              // Continue to the next element
             }
 
-            // Dispose handles
-            for (const el of batch) {
-              await el.dispose()
-            }
+            // Dispose element handle to prevent memory leaks
+            await element.dispose().catch(() => {})
           }
         } catch (selectorError) {
           console.error(`Error with selector ${selector}: ${selectorError}`)
-          // Continue to the next selector
+          // Continue to the next selector type
         }
       }
 
-      // Process main content recursively to find more components if enabled
-      if (extractMainContent && results.length < maxComponents) {
-        try {
-          console.log('Starting recursive processing of main content...')
-
-          // Try to find main content in this order of priority
-          const mainSelectors = [
-            'main', // Semantic main element
-            '#main', // Common main ID
-            '#content', // Common content ID
-            'article', // Article content
-            '.main-content', // Common main content class
-            '[role="main"]', // ARIA role main
-            '#root', // React apps often use root
-            '.content', // Common content class
-            'body > div > div', // Common pattern for main wrapper
-            'body > div', // Fallback to first div in body
-            'body', // Last resort
-          ]
-
-          let mainContent = null
-          for (const selector of mainSelectors) {
-            mainContent = await page.$(selector)
-            if (mainContent) {
-              console.log(`Found main content using selector: ${selector}`)
-              break
-            }
-          }
-
-          if (mainContent) {
-            await processElementRecursively(page, mainContent, {
-              maxDepth,
-              skipScreenshots,
-              results,
-              maxComponents,
-              scoringEnabled: dynamicScoring,
-            })
-            await mainContent.dispose()
-          }
-        } catch (recursiveError) {
-          console.error('Error in recursive processing:', recursiveError)
-        }
-      }
-
-      // Clear the timeout since we finished successfully
+      // Clear the timeout since we've finished
       clearTimeout(extractionTimeout)
 
-      // Sort by importance score if dynamic scoring was enabled
-      if (dynamicScoring) {
-        results.sort((a, b) => {
-          const scoreA = a.metadata?.importanceScore || 0
-          const scoreB = b.metadata?.importanceScore || 0
-          return scoreB - scoreA // Higher scores first
-        })
-      }
-
-      // Remove any duplicate components by type and HTML similarity
-      // But preserve high-importance components
-      const uniqueComponents = results.filter((component, index) => {
-        // Always keep high-importance components
-        if (
-          component.metadata?.importanceScore &&
-          component.metadata.importanceScore > 70
-        ) {
-          return true
-        }
-
-        // For other components, check for duplicates
-        return (
-          results.findIndex(
-            (c) => c.type === component.type && c.html === component.html,
-          ) === index
-        )
+      // Sort components by type for better organization
+      results.sort((a, b) => {
+        // First by type
+        if (a.type !== b.type) return a.type.localeCompare(b.type)
+        // Then by name
+        return a.name.localeCompare(b.name)
       })
 
-      // Apply component limit
-      const finalComponents = uniqueComponents.slice(0, maxComponents)
+      console.log(`Extraction complete. Found ${results.length} components`)
 
       // Store in cache
       componentCache.set(cacheKey, {
         timestamp: Date.now(),
-        components: finalComponents,
+        components: results,
       })
 
-      return { components: finalComponents }
+      return { components: results }
     } catch (error) {
       clearTimeout(extractionTimeout)
       throw error
@@ -1052,7 +1163,7 @@ export async function extractWebsite(
       }`,
     )
   } finally {
-    // Make sure we always close the browser
+    // Always close the browser
     if (browser) {
       try {
         await browser.close()

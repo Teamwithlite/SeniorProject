@@ -101,7 +101,7 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
   const adjustScale = useCallback(() => {
     if (previewRef.current && component.metadata?.dimensions) {
       const containerWidth = previewRef.current.clientWidth
-      const contentWidth = component.metadata.dimensions.width
+      const contentWidth = component.metadata.dimensions.width || 300
       if (contentWidth > containerWidth) {
         setScale(Math.max(0.5, containerWidth / contentWidth))
       } else {
@@ -124,15 +124,37 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Extract background color from component or context styles
+  const backgroundColor =
+    component.styles?._contextBackground ||
+    component.styles?.backgroundColor ||
+    '#ffffff'
+  const textColor =
+    component.styles?._contextColor || component.styles?.color || '#000000'
+
+  // Get original dimensions
+  const width = component.metadata?.dimensions?.width || 'auto'
+  const height = component.metadata?.dimensions?.height || 'auto'
+
+  // Generate preview HTML
   const previewHtml = useMemo(() => {
-    return { __html: component.cleanHtml || component.html }
+    // If component has external styles, include them with the HTML
+    const html = component.cleanHtml || component.html
+
+    // Wrap the component in a container that preserves original styling context
+    return {
+      __html: html,
+    }
   }, [component.cleanHtml, component.html])
 
+  // Get component's original display mode
+  const displayMode = component.metadata?.originalStyles?.display || 'block'
+
   return (
-    <Card className='mb-6 overflow-hidden border-2 border-periwinkle-200 dark:border-night-600'>
-      <CardHeader className='bg-nyanza-100 dark:bg-night-300'>
+    <Card className='mb-6 overflow-hidden border-2 border-periwinkle-200'>
+      <CardHeader className='bg-nyanza-100'>
         <div className='flex items-center justify-between'>
-          <CardTitle className='text-lg flex items-center gap-2 text-white dark:text-gray-100'>
+          <CardTitle className='text-lg flex items-center gap-2 text-white'>
             {component.name}
             <Badge variant='secondary' className='text-xs'>
               {component.type || 'Component'}
@@ -163,17 +185,11 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
           onValueChange={setActiveTab}
           className='w-full'
         >
-          <TabsList className='w-full border-b dark:border-night-600 dark:bg-night-400'>
-            <TabsTrigger
-              value='preview'
-              className='flex items-center gap-2 dark:data-[state=active]:bg-night-300 dark:data-[state=active]:text-gray-100 dark:text-gray-400'
-            >
+          <TabsList className='w-full border-b'>
+            <TabsTrigger value='preview' className='flex items-center gap-2'>
               <Eye className='h-4 w-4' /> Preview
             </TabsTrigger>
-            <TabsTrigger
-              value='code'
-              className='flex items-center gap-2 dark:data-[state=active]:bg-night-300 dark:data-[state=active]:text-gray-100 dark:text-gray-400'
-            >
+            <TabsTrigger value='code' className='flex items-center gap-2'>
               <Code className='h-4 w-4' /> Code
             </TabsTrigger>
           </TabsList>
@@ -185,11 +201,10 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
                 size='sm'
                 onClick={() => setScale((prev) => Math.max(0.5, prev - 0.1))}
                 disabled={scale <= 0.5}
-                className='dark:border-night-700 dark:bg-night-500 dark:text-gray-200 dark:hover:bg-night-600'
               >
                 <Minus className='h-3 w-3' />
               </Button>
-              <span className='text-xs text-muted-foreground dark:text-gray-400'>
+              <span className='text-xs text-muted-foreground'>
                 {Math.round(scale * 100)}%
               </span>
               <Button
@@ -197,107 +212,84 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
                 size='sm'
                 onClick={() => setScale((prev) => Math.min(1, prev + 0.1))}
                 disabled={scale >= 1}
-                className='dark:border-night-700 dark:bg-night-500 dark:text-gray-200 dark:hover:bg-night-600'
               >
                 <Plus className='h-3 w-3' />
               </Button>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={adjustScale}
-                className='dark:border-night-700 dark:bg-night-500 dark:text-gray-200 dark:hover:bg-night-600'
-              >
+              <Button variant='outline' size='sm' onClick={adjustScale}>
                 <Maximize2 className='h-3 w-3' />
               </Button>
             </div>
 
+            {/* Preview container with context-matching background */}
             <div
               ref={previewRef}
-              className='border rounded p-4 overflow-auto preview-wrapper'
+              className='border rounded overflow-auto preview-wrapper relative'
               style={{
                 minHeight: '150px',
-                backgroundColor:
-                  component.styles?.backgroundColor ||
-                  (component.metadata?.hasBackgroundImage
-                    ? '#f5f5f5'
-                    : 'white'),
-                backgroundImage:
-                  component.styles?.backgroundImage ||
-                  (component.metadata?.hasBackgroundImage &&
-                  component.metadata?.backgroundImageUrl
-                    ? `url('${component.metadata.backgroundImageUrl}')`
-                    : 'none'),
-                backgroundSize: component.styles?.backgroundSize || 'cover',
-                backgroundPosition:
-                  component.styles?.backgroundPosition || 'center',
-                // Add vendor prefixes for better cross-browser compatibility
-                WebkitBackgroundSize:
-                  component.styles?.backgroundSize || 'cover',
-                MozBackgroundSize: component.styles?.backgroundSize || 'cover',
+                padding: '0.5rem',
+                backgroundColor: backgroundColor,
+                color: textColor,
+                fontFamily: component.styles?._contextFontFamily || 'inherit',
+                fontSize: component.styles?._contextFontSize || 'inherit',
               }}
             >
+              {/* Component container with original dimensions */}
               <div
-                className='component-preview-container'
+                className='component-preview-parent'
                 style={{
-                  transformOrigin: 'top left',
-                  width: component.metadata?.dimensions?.width
-                    ? `${component.metadata.dimensions.width}px`
-                    : 'auto',
-                  height: component.metadata?.dimensions?.height
-                    ? `${component.metadata.dimensions.height}px`
-                    : 'auto',
-                  backgroundColor:
-                    component.styles?.backgroundColor || 'inherit',
-                  color: component.styles?.color || 'inherit',
-                  fontSize: component.styles?.fontSize || 'inherit',
-                  fontFamily: component.styles?.fontFamily || 'inherit',
-                  fontWeight: component.styles?.fontWeight || 'inherit',
-                  lineHeight: component.styles?.lineHeight || 'inherit',
-
-                  // Apply text alignment as a CSS string value
-                  ...(component.styles?.textAlign && {
-                    textAlign: component.styles.textAlign as any,
-                  }),
-
-                  display: component.styles?.display || 'block',
-
-                  // Apply flex properties with type casting to handle TypeScript constraints
-                  ...(component.styles?.flexDirection && {
-                    flexDirection: component.styles.flexDirection as any,
-                  }),
-                  alignItems: component.styles?.alignItems || 'inherit',
-                  justifyContent: component.styles?.justifyContent || 'inherit',
-                  gap: component.styles?.gap || 'inherit',
-
-                  // Apply visual and border properties
-                  borderRadius: component.styles?.borderRadius || 'inherit',
-                  border: component.styles?.border || 'inherit',
-                  boxShadow: component.styles?.boxShadow || 'inherit',
-                  padding: component.styles?.padding || '0',
-                  margin: component.styles?.margin || '0',
-
-                  // Apply text transformation with type casting
-                  ...(component.styles?.textTransform && {
-                    textTransform: component.styles.textTransform as any,
-                  }),
-
-                  letterSpacing: component.styles?.letterSpacing || 'inherit',
-                  backgroundImage:
-                    component.styles?.backgroundImage || 'inherit',
-                  backgroundSize: component.styles?.backgroundSize || 'inherit',
-                  backgroundPosition:
-                    component.styles?.backgroundPosition || 'inherit',
-                  transition: component.styles?.transition || 'inherit',
-
-                  // Apply transform with scale, combining component transform if available
-                  transform: component.styles?.transform
-                    ? `${component.styles.transform} scale(${scale})`
-                    : `scale(${scale})`,
+                  display: 'flex',
+                  justifyContent: 'flex-start',
+                  alignItems: 'flex-start',
+                  width: '100%',
+                  minHeight: '100px',
                 }}
               >
-                <div dangerouslySetInnerHTML={previewHtml} />
+                <div
+                  className='component-preview-container'
+                  style={{
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'top left',
+                    // Prevent container from stretching component
+                    display: 'inline-block',
+                    width: typeof width === 'number' ? `${width}px` : width,
+                    height: typeof height === 'number' ? `${height}px` : height,
+                    maxWidth: '100%',
+                    position: 'relative',
+                  }}
+                >
+                  {/* Insert component HTML */}
+                  <div
+                    dangerouslySetInnerHTML={previewHtml}
+                    className='component-inner-content'
+                  />
+
+                  {/* If we have external styles from the component, add them */}
+                  {component.metadata?.externalStyles && (
+                    <style
+                      dangerouslySetInnerHTML={{
+                        __html: component.metadata.externalStyles,
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             </div>
+
+            {/* If we have screenshot, show it for comparison */}
+            {component.screenshot && (
+              <div className='mt-4'>
+                <p className='text-xs text-muted-foreground mb-1'>
+                  Original screenshot:
+                </p>
+                <div className='border rounded overflow-hidden'>
+                  <img
+                    src={component.screenshot}
+                    alt={`Original ${component.type} screenshot`}
+                    className='max-w-full h-auto'
+                  />
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value='code' className='p-0'>
