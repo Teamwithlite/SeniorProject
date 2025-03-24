@@ -41,17 +41,14 @@ import {
   Chrome,
 } from 'lucide-react'
 
-// For code highlighting - make sure these are installed
+// For code highlighting
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { tomorrow } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 
 // Import your types
 import type { ActionData, LoaderData, ExtractedComponent } from '~/types'
 
-// Updated loader to check for stored data in URL params only
 export const loader: LoaderFunction = async ({ request }) => {
-  // We'll use client-side JavaScript to load from localStorage,
-  // so we just return a default state here
   return json<LoaderData>({
     initialMessage: 'Enter a URL to extract UI components',
     storedData: null,
@@ -59,7 +56,6 @@ export const loader: LoaderFunction = async ({ request }) => {
   })
 }
 
-// A list of possible component types, used for optional filtering
 const COMPONENT_TYPES = [
   { id: 'buttons', label: 'Buttons' },
   { id: 'navigation', label: 'Navigation' },
@@ -71,19 +67,16 @@ const COMPONENT_TYPES = [
   { id: 'modals', label: 'Modals & Dialogs' },
 ]
 
-// Renders a single extracted component
 function ComponentPreview({ component }: { component: ExtractedComponent }) {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('preview')
   const [scale, setScale] = useState(1)
   const previewRef = useRef<HTMLDivElement>(null)
 
-  // Attempt to scale the preview so it fits within the container
   const adjustScale = useCallback(() => {
     if (previewRef.current && component.metadata?.dimensions) {
       const containerWidth = previewRef.current.clientWidth
       const contentWidth = component.metadata.dimensions.width
-      // Only scale down if the content is wider than the container
       if (contentWidth > containerWidth) {
         setScale(Math.max(0.5, containerWidth / contentWidth))
       } else {
@@ -106,7 +99,6 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Pre-render the HTML content
   const previewHtml = useMemo(() => {
     return { __html: component.cleanHtml || component.html }
   }, [component.cleanHtml, component.html])
@@ -155,9 +147,7 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
             </TabsTrigger>
           </TabsList>
 
-          {/* PREVIEW TAB */}
           <TabsContent value='preview' className='p-4'>
-            {/* Scale controls */}
             <div className='relative mb-2 flex items-center justify-end gap-2'>
               <Button
                 variant='outline'
@@ -183,7 +173,6 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
               </Button>
             </div>
 
-            {/* The container for the scaled preview */}
             <div
               ref={previewRef}
               className='border rounded p-4 bg-white overflow-auto preview-wrapper'
@@ -200,7 +189,6 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
                   height: component.metadata?.dimensions?.height
                     ? `${component.metadata.dimensions.height}px`
                     : 'auto',
-                  // Add inline styles from component.styles to container
                   backgroundColor:
                     component.styles?.backgroundColor || 'inherit',
                   color: component.styles?.color || 'inherit',
@@ -217,7 +205,6 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
             </div>
           </TabsContent>
 
-          {/* CODE TAB */}
           <TabsContent value='code' className='p-0'>
             <SyntaxHighlighter
               language='markup'
@@ -237,7 +224,6 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
   )
 }
 
-// The main component for the homepage
 export default function ExtractPage() {
   const loaderData = useLoaderData<typeof loader>()
   const navigate = useNavigate()
@@ -263,53 +249,39 @@ export default function ExtractPage() {
   const [showSavedLinks, setShowSavedLinks] = useState(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const extractionStartTime = useRef<number | null>(null)
-
-  // Initialize with loader data if available
   const [extractionData, setExtractionData] = useState<ActionData | null>(null)
   const [sessionId, setSessionId] = useState<string>(loaderData.storedSessionId)
   const fetcher = useFetcher<ActionData>()
 
-  // Load data from localStorage on component mount
   useEffect(() => {
     const storedData = localStorage.getItem('extractionData')
     const storedSessionId = localStorage.getItem('sessionId')
     const storedLinks = localStorage.getItem('savedLinks')
 
-    if (storedData) {
-      setExtractionData(JSON.parse(storedData))
-    }
-    if (storedSessionId) {
-      setSessionId(storedSessionId)
-    }
-    if (storedLinks) {
-      setSavedLinks(JSON.parse(storedLinks))
-    }
+    if (storedData) setExtractionData(JSON.parse(storedData))
+    if (storedSessionId) setSessionId(storedSessionId)
+    if (storedLinks) setSavedLinks(JSON.parse(storedLinks))
   }, [])
 
-  // Update localStorage when extraction data changes
   useEffect(() => {
     if (extractionData) {
       localStorage.setItem('extractionData', JSON.stringify(extractionData))
     }
   }, [extractionData])
 
-  // Update localStorage when session ID changes
   useEffect(() => {
     if (sessionId) {
       localStorage.setItem('sessionId', sessionId)
     }
   }, [sessionId])
 
-  // Function to save links to history
   const saveLink = (link: string) => {
     if (!link) return
-
-    const updatedLinks = Array.from(new Set([link, ...savedLinks])).slice(0, 5) // Keep only 5 unique links
+    const updatedLinks = Array.from(new Set([link, ...savedLinks])).slice(0, 5)
     setSavedLinks(updatedLinks)
     localStorage.setItem('savedLinks', JSON.stringify(updatedLinks))
   }
 
-  // Function to clear stored data
   const clearStoredData = () => {
     setExtractionData(null)
     setSessionId('')
@@ -317,12 +289,10 @@ export default function ExtractPage() {
     localStorage.removeItem('sessionId')
   }
 
-  // Function to generate customized HTML with styles
   const generateCustomizedHTML = (
     originalHTML: string,
     styles: Record<string, string>,
   ) => {
-    // For simple implementation, just wrap in a div with styles
     const styleString = Object.entries(styles)
       .filter(([_, value]) => value)
       .map(([key, value]) => `${key}: ${value};`)
@@ -330,7 +300,6 @@ export default function ExtractPage() {
 
     if (!styleString) return originalHTML
 
-    // Return with style attribute added
     return originalHTML.replace(
       /<([a-z][a-z0-9]*)\s/i,
       `<$1 style="${styleString}" `,
@@ -339,36 +308,26 @@ export default function ExtractPage() {
 
   const filteredComponents = useMemo(() => {
     if (!extractionData?.components) return []
-
-    // If no types are selected, show all components
     if (selectedTypes.length === 0) return extractionData.components
-
-    // Filter components that match any of the selected types
     return extractionData.components.filter((component) =>
       selectedTypes.includes(component.type?.toLowerCase()),
     )
   }, [extractionData?.components, selectedTypes])
 
-  // Function to copy customized code
   const copyCustomCode = () => {
     if (!selectedComponent) return
-
     const customCode = generateCustomizedHTML(
       extractionData?.components?.[parseInt(selectedComponent)]?.html || '',
       customStyles,
     )
-
     navigator.clipboard.writeText(customCode)
     setCopiedCustom(true)
     setTimeout(() => setCopiedCustom(false), 2000)
   }
 
-  // Debug logs - very important for troubleshooting
   useEffect(() => {
     console.log('Fetcher state:', fetcher.state)
     console.log('Extraction data:', extractionData)
-
-    // Add manual debug info
     setManualDebug(
       (prev) =>
         prev +
@@ -379,7 +338,6 @@ export default function ExtractPage() {
     )
   }, [fetcher.state, extractionData])
 
-  // Component type filter toggle
   const toggleComponentType = (typeId) => {
     if (selectedTypes.includes(typeId)) {
       setSelectedTypes(selectedTypes.filter((id) => id !== typeId))
@@ -388,37 +346,28 @@ export default function ExtractPage() {
     }
   }
 
-  // Start extraction - this is the handler for the Extract button
   const startExtraction = () => {
     if (!url) return
-
-    // Save the URL to history
     saveLink(url)
-
-    // Reset state for a fresh extraction
     setSessionId('')
     setManualDebug('')
     extractionStartTime.current = Date.now()
     setIsPolling(true)
 
-    // Create a FormData object to send to the server
     const formData = new FormData()
     formData.append('url', url)
     formData.append('action', 'start')
 
-    // Add any selected component types to filter
     if (selectedTypes.length > 0) {
       selectedTypes.forEach((type) => {
         formData.append('componentTypes', type)
       })
     }
 
-    // Submit the form to the /extract route
     setManualDebug(`[${new Date().toISOString()}] Starting extraction...`)
     fetcher.submit(formData, { method: 'post', action: '/extract' })
   }
 
-  // Manual check status button
   const checkStatus = () => {
     if (!sessionId) {
       setManualDebug(
@@ -444,10 +393,8 @@ export default function ExtractPage() {
     fetcher.submit(formData, { method: 'post', action: '/extract' })
   }
 
-  // Poll for updates
   const pollForUpdates = useCallback(() => {
     if (!sessionId) return
-
     setManualDebug(
       (prev) =>
         prev +
@@ -463,9 +410,7 @@ export default function ExtractPage() {
     fetcher.submit(formData, { method: 'post', action: '/extract' })
   }, [fetcher, sessionId, page, componentsPerPage])
 
-  // Start or stop polling based on extraction status
   useEffect(() => {
-    // If we get a session ID from the server but don't have one locally, set it
     if (extractionData?.sessionId && !sessionId) {
       setManualDebug(
         (prev) =>
@@ -475,7 +420,6 @@ export default function ExtractPage() {
       setSessionId(extractionData.sessionId)
     }
 
-    // If the extraction is in progress, start polling
     if (
       extractionData?.status === 'pending' ||
       extractionData?.status === 'processing'
@@ -487,11 +431,9 @@ export default function ExtractPage() {
             `\n[${new Date().toISOString()}] Starting polling for status: ${extractionData?.status}`,
         )
         setIsPolling(true)
-        // Poll every 2 seconds
         pollingRef.current = setInterval(pollForUpdates, 2000)
       }
     } else if (isPolling) {
-      // Extraction is done or error, stop polling
       setManualDebug(
         (prev) =>
           prev +
@@ -504,7 +446,6 @@ export default function ExtractPage() {
       }
     }
 
-    // Add a timeout safety valve - if extraction takes too long, stop polling
     if (
       extractionStartTime.current &&
       Date.now() - extractionStartTime.current > 120000
@@ -521,7 +462,6 @@ export default function ExtractPage() {
       }
     }
 
-    // Cleanup on unmount
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
@@ -530,7 +470,6 @@ export default function ExtractPage() {
     }
   }, [extractionData, isPolling, pollForUpdates, sessionId])
 
-  // Timer for elapsed time
   useEffect(() => {
     let timer
     if (isPolling) {
@@ -543,11 +482,9 @@ export default function ExtractPage() {
     return () => clearInterval(timer)
   }, [isPolling])
 
-  // Store extraction data when complete and persist it
   useEffect(() => {
     if (fetcher.data?.components && fetcher.data.components.length > 0) {
       setExtractionData(fetcher.data)
-      // Store in sessionStorage on the client side
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('extractionData', JSON.stringify(fetcher.data))
         sessionStorage.setItem(
@@ -559,7 +496,6 @@ export default function ExtractPage() {
     }
   }, [fetcher.data, fetcher.formData])
 
-  // Clean up storage when navigating away (except to debug/playground)
   useEffect(() => {
     return () => {
       const currentPath = window.location.pathname
@@ -575,7 +511,6 @@ export default function ExtractPage() {
     }
   }, [])
 
-  // Functions for pagination
   const handleNextPage = () => {
     if (extractionData?.totalPages && page < extractionData.totalPages) {
       setPage(page + 1)
@@ -656,14 +591,12 @@ export default function ExtractPage() {
                 </Button>
               </div>
 
-              {/* Component type filter */}
               <div>
                 <Button
                   variant='outline'
                   size='sm'
                   className='flex items-center gap-2 mb-2'
                   onClick={() => {
-                    // Toggle all vs none
                     if (selectedTypes.length > 0) {
                       setSelectedTypes([])
                     } else {
@@ -699,52 +632,66 @@ export default function ExtractPage() {
               </div>
             </div>
 
-            {/* Extraction status */}
+            {/* Enhanced Loading Indicators */}
             {(isPolling ||
               extractionData?.status === 'pending' ||
               extractionData?.status === 'processing') && (
-              <div className='my-4'>
-                <div className='flex justify-between text-sm mb-1'>
-                  <span>
-                    {extractionData?.message || 'Extracting components...'}
-                    {extractionStartTime.current
-                      ? ` (${elapsedTime}s elapsed)`
-                      : ''}
+              <div className='my-4 animate-pulse'>
+                <div className='flex justify-between items-center mb-3'>
+                  <div className='flex items-center space-x-2'>
+                    <div className='flex space-x-1'>
+                      <div className='w-2 h-2 rounded-full bg-blue-600 animate-bounce'></div>
+                      <div
+                        className='w-2 h-2 rounded-full bg-blue-600 animate-bounce'
+                        style={{ animationDelay: '0.2s' }}
+                      ></div>
+                      <div
+                        className='w-2 h-2 rounded-full bg-blue-600 animate-bounce'
+                        style={{ animationDelay: '0.4s' }}
+                      ></div>
+                    </div>
+                    <span className='text-sm'>
+                      {extractionData?.message || 'Analyzing website...'}
+                      {extractionStartTime.current ? ` (${elapsedTime}s)` : ''}
+                    </span>
+                  </div>
+                  <span className='text-sm font-medium'>
+                    {extractionData?.progress || 0}%
                   </span>
-                  <span>{extractionData?.progress || 0}%</span>
                 </div>
-                <div className='w-full bg-gray-200 rounded-full h-2.5'>
+
+                <div className='w-full bg-gray-200 rounded-full h-2.5 overflow-hidden'>
                   <div
-                    className='bg-periwinkle h-2.5 rounded-full transition-all duration-300'
+                    className='bg-blue-600 h-2.5 rounded-full transition-all duration-300 relative'
                     style={{ width: `${extractionData?.progress || 0}%` }}
-                  ></div>
+                  >
+                    <div className='absolute inset-0 bg-blue-400 opacity-50 animate-pulse'></div>
+                  </div>
                 </div>
+
+                {extractionData?.statusDetails && (
+                  <div className='mt-2 text-xs text-gray-500'>
+                    {extractionData.statusDetails}
+                  </div>
+                )}
                 {elapsedTime > 30 && (
-                  <div className='mt-2 text-xs text-red-500'>
-                    Extraction is taking longer than expected. You can try
-                    refreshing the page if it doesn't complete soon.
+                  <div className='mt-2 text-xs text-yellow-600'>
+                    <Loader2 className='inline mr-1 h-3 w-3 animate-spin' />
+                    Extraction is taking longer than expected...
                   </div>
                 )}
               </div>
             )}
 
-            {/* Error display */}
             {extractionData?.error && (
-              <Alert className='mt-4'>
-                <AlertDescription>{extractionData.error}</AlertDescription>
+              <Alert variant='destructive' className='mt-4'>
+                <AlertDescription>
+                  <span className='font-medium'>Error:</span>{' '}
+                  {extractionData.error}
+                </AlertDescription>
               </Alert>
             )}
 
-            {/* Manual check button when things seem stuck */}
-            {isPolling && elapsedTime > 20 && (
-              <div className='mt-4'>
-                <Button onClick={checkStatus} variant='outline' size='sm'>
-                  Check Status Manually
-                </Button>
-              </div>
-            )}
-
-            {/* Navigation buttons to other pages */}
             {extractionData?.components &&
               extractionData.components.length > 0 && (
                 <div className='flex justify-end space-x-2 mt-6'>
@@ -766,7 +713,6 @@ export default function ExtractPage() {
                 </div>
               )}
 
-            {/* Show extracted components */}
             {extractionData?.components &&
             extractionData.components.length > 0 ? (
               <div className='mt-4'>
