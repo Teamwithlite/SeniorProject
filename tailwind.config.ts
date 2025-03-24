@@ -70,6 +70,20 @@ const config = {
           900: '#fbf6f0',
         },
 
+        // Night mode colors
+        night: {
+          DEFAULT: '#121212', // Main black
+          100: '#000000', // Pure black
+          200: '#0a0a0a', // Very dark black
+          300: '#121212', // Dark gray (material dark)
+          400: '#181818', // Slightly lighter
+          500: '#202020', // Medium dark gray
+          600: '#282828', // Dark charcoal
+          700: '#303030', // Charcoal
+          800: '#383838', // Dark slate
+          900: '#404040', // Slate gray
+        },
+
         // Theme structure
         background: '#d6f6dd', // nyanza as default background
         foreground: '#280b4e', // periwinkle-100 for contrast
@@ -108,9 +122,54 @@ const config = {
         input: '#e9dcfa', // periwinkle-700
         ring: '#f6aeb1', // salmon_pink-600
 
+        // Dark mode variants
+        dark: {
+          background: '#121212', // night-300 for main background
+          foreground: '#e0e0e0', // Light gray text for contrast
+
+          primary: {
+            DEFAULT: '#282828', // night-600
+            foreground: '#e0e0e0', // Light gray text
+          },
+
+          secondary: {
+            DEFAULT: '#202020', // night-500
+            foreground: '#f6aeb1', // salmon_pink-600 for accent
+          },
+
+          accent: {
+            DEFAULT: '#303030', // night-700
+            foreground: '#dac4f7', // periwinkle for contrast
+          },
+
+          muted: {
+            DEFAULT: '#181818', // night-400
+            foreground: '#a0a0a0', // Medium gray text
+          },
+
+          card: {
+            DEFAULT: '#1a1a1a', // Slightly lighter than background
+            foreground: '#e0e0e0', // Light gray text
+          },
+
+          popover: {
+            DEFAULT: '#1a1a1a', // Slightly lighter than background
+            foreground: '#e0e0e0', // Light gray text
+          },
+
+          border: '#303030', // night-700
+          input: '#202020', // night-500
+          ring: '#303030', // night-700
+        },
+
         destructive: {
           DEFAULT: '#900f16', // salmon_pink-200
           foreground: '#fdebec', // salmon_pink-900
+        },
+
+        'dark-destructive': {
+          DEFAULT: '#ff3b46', // Brighter red for dark mode
+          foreground: '#000000', // Pure black for contrast
         },
       },
       borderRadius: {

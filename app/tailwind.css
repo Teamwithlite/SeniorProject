@@ -35,6 +35,36 @@
     --radius: 0.5rem;
   }
 
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+
   * {
     @apply border-border;
   }
@@ -91,11 +121,13 @@
   }
 }
 
-/* Component preview styling */
 .component-preview-container,
 .component-playground-container {
   transition: transform 0.2s ease;
   min-height: 10px;
+  display: inline-block !important; /* Force inline-block to prevent stretching */
+  box-sizing: border-box;
+  position: relative;
 }
 
 .component-preview-container *,
@@ -107,29 +139,115 @@
 .component-preview-container,
 .component-playground-container {
   isolation: isolate;
+  transform-origin: top left;
 }
 
+/* Prevent buttons from stretching in containers */
 .component-preview-container button,
 .component-playground-container button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-block;
 }
 
+/* Fix for absolute/fixed positioning inside preview */
 .component-preview-container [style*='position: fixed'],
 .component-preview-container [style*='position:fixed'],
 .component-playground-container [style*='position: fixed'],
-.component-playground-container [style*='position:fixed'] {
-  position: relative !important;
-}
-
+.component-playground-container [style*='position:fixed'],
 .component-preview-container [style*='position: absolute'],
 .component-preview-container [style*='position:absolute'],
 .component-playground-container [style*='position: absolute'],
 .component-playground-container [style*='position:absolute'] {
   position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
 }
 
+/* For donation buttons and other colored blocks */
+.component-preview-container .extracted-component-donation-buttons,
+.component-preview-container [class*='donate'],
+.component-preview-container [id*='donate'] {
+  display: inline-block !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+/* Menu components need special treatment */
+.component-preview-container .extracted-component-menus,
+.component-preview-container .menu,
+.component-preview-container [role='menu'] {
+  display: block !important;
+  position: static !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* Ensure menu items are visible */
+.component-preview-container .menu-item,
+.component-preview-container .dropdown-item,
+.component-preview-container [role='menuitem'] {
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* Fix preview wrapper */
+.preview-wrapper {
+  overflow: auto;
+  max-height: 500px;
+  border-radius: 0.375rem;
+}
+
+/* Special styling for component types that tend to be problematic */
+.component-preview-parent {
+  padding: 8px;
+  overflow: auto;
+}
+
+/* Component type specific adjustments */
+.extracted-component {
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* Ensure buttons don't expand */
+.buttons-component button,
+.buttons-component .btn,
+.buttons-component [role='button'] {
+  display: inline-block !important;
+  width: auto !important;
+}
+
+/* Corrects navigation display */
+.navigation-component nav,
+.navigation-component .navbar,
+.navigation-component .nav {
+  display: block !important;
+  width: 100% !important;
+}
+
+/* Fixes for card layouts */
+.cards-component {
+  display: block !important;
+  width: auto !important;
+  max-width: 100% !important;
+}
+
+/* Make donation buttons visible with proper constraints */
+.donation-buttons-component {
+  display: inline-block !important;
+  width: auto !important;
+}
+
+/* Fix for menu rendering */
+.menus-component {
+  display: block !important;
+  position: static !important;
+}
 @keyframes pulse {
   0% {
     opacity: 0.5;
