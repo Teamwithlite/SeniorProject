@@ -25,19 +25,21 @@ export const action: ActionFunction = async ({ request }) => {
     // Call our extraction service and wait for results
     console.log('Starting component extraction...')
     const options: any = {
-      // Enable performance optimizations
+      // Maximize performance
       aboveTheFoldFirst: true, // Prioritize visible content first
       lazyScreenshots: true, // Only take screenshots of important components
       useCache: true, // Use caching to speed up repeated extractions
       dynamicScoring: true, // Use importance scoring to prioritize components
-      timeout: 45000, // Slightly shorter timeout for faster response
-      maxComponents: 80, // Get more components for better selection
+      timeout: 30000, // Shorter timeout for faster response (30 seconds)
+      maxComponents: 50, // Reduced component limit for faster processing
+      skipScreenshots: formData.get('skipScreenshots') === 'true', // Option to skip screenshots completely
     }
 
-    // Add filters if present
+    // Add filters if present (but don't do extensive checks)
     if (componentTypes.length > 0) {
       console.log('Filtering by component types:', componentTypes)
       options.componentTypes = componentTypes
+      options.skipTypeValidation = true // Skip extensive type validation for speed
     }
 
     const extractedData = await extractWebsite(url, options)

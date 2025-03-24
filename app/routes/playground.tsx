@@ -13,7 +13,7 @@ import { Input } from '~/components/ui/input'
 import { Slider } from '~/components/ui/slider'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
-import { Copy, Check, ArrowLeft } from 'lucide-react'
+import { Copy, Check, ArrowLeft, RefreshCw } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { tomorrow } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 
@@ -123,10 +123,33 @@ export default function PlaygroundPage() {
     [],
   )
 
-  // Load extraction data from localStorage or sessionStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
+  // Keep track of the last extraction timestamp to detect changes
+  const [lastLoadedTimestamp, setLastLoadedTimestamp] = useState<number>(0)
+
+  // Function to load the latest extraction data from storage
+  const loadLatestExtractionData = useCallback(
+    (forceReload: boolean = false) => {
+      if (typeof window === 'undefined') return
+
       try {
+        console.log('Loading latest extraction data')
+
+        // Get the latest timestamp from localStorage to check for updates
+        const currentTimestamp = parseInt(
+          localStorage.getItem('extractionTimestamp') || '0',
+        )
+
+        // Skip reload if the data hasn't changed and we're not forcing a reload
+        if (currentTimestamp <= lastLoadedTimestamp && !forceReload) {
+          console.log('No new extraction data detected')
+          return
+        }
+
+        // Reset loading state when forcing reload
+        if (forceReload) {
+          setIsLoading(true)
+        }
+
         // Try to get full data from sessionStorage first (preferred if available)
         let savedData = sessionStorage.getItem('extractionDataFull')
 
@@ -154,9 +177,26 @@ export default function PlaygroundPage() {
               setExtractionData(parsedData)
             }
 
-            if (savedComponent) {
+            // Check if saved component is valid for this dataset
+            const savedComponentIndex = savedComponent
+              ? parseInt(savedComponent)
+              : null
+            const isValidIndex =
+              savedComponentIndex !== null &&
+              savedComponentIndex >= 0 &&
+              savedComponentIndex < parsedData.components.length
+
+            if (isValidIndex) {
+              // Use saved component if it's valid
               setSelectedComponent(savedComponent)
+            } else {
+              // Otherwise default to the first component
+              setSelectedComponent('0')
+              localStorage.setItem('selectedComponent', '0')
             }
+
+            // Update the last loaded timestamp
+            setLastLoadedTimestamp(currentTimestamp)
           } else {
             navigate('/')
           }
@@ -169,8 +209,130 @@ export default function PlaygroundPage() {
       } finally {
         setIsLoading(false)
       }
+    },
+    [navigate, lastLoadedTimestamp],
+  )
+
+  // Keep track of the last loaded extraction ID
+  const [lastLoadedExtractionId, setLastLoadedExtractionId] =
+    useState<string>('')
+
+  // Load extraction data when component mounts and set up polling for updates
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Check if there's a flag indicating new extraction data is available
+      const newExtractionAvailable =
+        sessionStorage.getItem('newExtractionAvailable') === 'true'
+      const currentExtractionId =
+        localStorage.getItem('currentExtractionId') ||
+        sessionStorage.getItem('currentExtractionId') ||
+        ''
+
+      console.log(
+        'Checking for new extraction, available:',
+        newExtractionAvailable,
+        'current ID:',
+        currentExtractionId,
+        'last loaded ID:',
+        lastLoadedExtractionId,
+      )
+
+      // If new extraction is available OR if this is a new extraction ID we haven't loaded yet
+      if (
+        newExtractionAvailable ||
+        (currentExtractionId && currentExtractionId !== lastLoadedExtractionId)
+      ) {
+        console.log('New extraction detected, forcing reload of latest data')
+
+        // Reset the flag - we're going to load the latest data now
+        sessionStorage.removeItem('newExtractionAvailable')
+
+        // Force-reset the selected component to ensure we're not showing an invalid component
+        localStorage.removeItem('selectedComponent')
+        setSelectedComponent(null)
+
+        // Update the last loaded extraction ID
+        setLastLoadedExtractionId(currentExtractionId)
+
+        // Load the latest data with force reload
+        loadLatestExtractionData(true)
+      } else {
+        // Normal initial load - force load the latest data
+        loadLatestExtractionData(true)
+
+        // Update the last loaded extraction ID if we have one
+        if (currentExtractionId) {
+          setLastLoadedExtractionId(currentExtractionId)
+        }
+      }
+
+      // Set up a timestamp in localStorage if it doesn't exist
+      if (!localStorage.getItem('extractionTimestamp')) {
+        localStorage.setItem('extractionTimestamp', Date.now().toString())
+      }
+
+      // Set up polling to check for updates every second
+      const pollingInterval = setInterval(() => {
+        // Check for new extraction when polling
+        const newExtractionFlag =
+          sessionStorage.getItem('newExtractionAvailable') === 'true'
+        const currentId =
+          localStorage.getItem('currentExtractionId') ||
+          sessionStorage.getItem('currentExtractionId') ||
+          ''
+
+        if (
+          newExtractionFlag ||
+          (currentId && currentId !== lastLoadedExtractionId)
+        ) {
+          console.log('Polling detected new extraction, reloading')
+          sessionStorage.removeItem('newExtractionAvailable')
+          setLastLoadedExtractionId(currentId)
+          loadLatestExtractionData(true)
+        } else {
+          // Regular polling check
+          loadLatestExtractionData()
+        }
+      }, 1000) // Check more frequently
+
+      // Add event listeners to detect changes in storage and window focus
+      const handleFocus = () => {
+        // When returning to this tab, check if new extraction is available
+        const newExtractionOnFocus =
+          sessionStorage.getItem('newExtractionAvailable') === 'true'
+        const currentIdOnFocus =
+          localStorage.getItem('currentExtractionId') ||
+          sessionStorage.getItem('currentExtractionId') ||
+          ''
+
+        if (
+          newExtractionOnFocus ||
+          (currentIdOnFocus && currentIdOnFocus !== lastLoadedExtractionId)
+        ) {
+          console.log('Focus detected new extraction, reloading')
+          sessionStorage.removeItem('newExtractionAvailable')
+          setLastLoadedExtractionId(currentIdOnFocus)
+          loadLatestExtractionData(true)
+        } else {
+          // Force reload when tab is focused even if no new extraction is detected
+          loadLatestExtractionData(true)
+        }
+      }
+
+      // Listen for focus events (when user returns to this tab)
+      window.addEventListener('focus', handleFocus)
+
+      return () => {
+        clearInterval(pollingInterval)
+        window.removeEventListener('focus', handleFocus)
+      }
     }
-  }, [navigate])
+  }, [loadLatestExtractionData, lastLoadedExtractionId])
+
+  // Add a refresh button to manually reload the extraction data
+  const handleRefreshData = () => {
+    loadLatestExtractionData()
+  }
 
   // Helper function to determine if a color is light or dark
   const isLightColor = (color: string): boolean => {
@@ -322,6 +484,15 @@ export default function PlaygroundPage() {
         <CardHeader className='flex flex-row items-center justify-between'>
           <CardTitle>Asset Playground</CardTitle>
           <div className='flex gap-2'>
+            <Button
+              variant='outline'
+              size='sm'
+              onClick={handleRefreshData}
+              title='Refresh to load latest extraction data'
+            >
+              <RefreshCw className='mr-2 h-4 w-4' />
+              Refresh Data
+            </Button>
             <Button
               variant='destructive'
               size='sm'

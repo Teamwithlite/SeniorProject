@@ -439,6 +439,9 @@ export default function ExtractPage() {
   useEffect(() => {
     if (extractionData) {
       try {
+        // Store a timestamp to track the latest extraction
+        localStorage.setItem('extractionTimestamp', Date.now().toString())
+
         // Try to store full data
         localStorage.setItem('extractionData', JSON.stringify(extractionData))
       } catch (error) {
@@ -446,6 +449,9 @@ export default function ExtractPage() {
         // Fall back to compressed data
         const storageData = prepareDataForStorage(extractionData)
         safelyStoreData('extractionData', storageData)
+
+        // Always update the timestamp even if we had to compress the data
+        localStorage.setItem('extractionTimestamp', Date.now().toString())
 
         // Keep full data in session storage
         try {
@@ -706,6 +712,14 @@ export default function ExtractPage() {
             'extractionDataFull',
             JSON.stringify(fetcher.data),
           )
+
+          // Set a flag to notify the playground that new data is available
+          // This will force the playground to use the latest data
+          sessionStorage.setItem('newExtractionAvailable', 'true')
+
+          // Add a unique identifier to track this specific extraction
+          const extractionId = `extraction_${Date.now()}`
+          sessionStorage.setItem('currentExtractionId', extractionId)
         } catch (e) {
           console.warn('Failed to store full extraction data:', e)
         }
@@ -714,11 +728,25 @@ export default function ExtractPage() {
         try {
           // Try full data first
           localStorage.setItem('extractionData', JSON.stringify(fetcher.data))
+
+          // Update timestamp and extraction ID in localStorage too
+          localStorage.setItem('extractionTimestamp', Date.now().toString())
+          const extractionId =
+            sessionStorage.getItem('currentExtractionId') ||
+            `extraction_${Date.now()}`
+          localStorage.setItem('currentExtractionId', extractionId)
         } catch (error) {
           console.warn('Failed to store full data in localStorage:', error)
           // Fall back to compressed data
           const minimalData = prepareDataForStorage(fetcher.data)
           safelyStoreData('extractionData', minimalData)
+
+          // Still update timestamp and extraction ID
+          localStorage.setItem('extractionTimestamp', Date.now().toString())
+          const extractionId =
+            sessionStorage.getItem('currentExtractionId') ||
+            `extraction_${Date.now()}`
+          localStorage.setItem('currentExtractionId', extractionId)
         }
 
         // Session ID is small, safe to store directly
