@@ -321,6 +321,7 @@ export default function ExtractPage() {
   const [page, setPage] = useState(1)
   const [componentsPerPage, setComponentsPerPage] = useState(10)
   const [isPolling, setIsPolling] = useState(false)
+  const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [manualDebug, setManualDebug] = useState<string>('')
   const [selectedComponent, setSelectedComponent] = useState<string | null>(
@@ -336,6 +337,15 @@ export default function ExtractPage() {
   const [copiedCustom, setCopiedCustom] = useState(false)
   const [savedLinks, setSavedLinks] = useState<string[]>([])
   const [showSavedLinks, setShowSavedLinks] = useState(false)
+  const [extractionMetrics, setExtractionMetrics] = useState({
+    totalElements: 0,
+    extractedElements: 0,
+    failedExtractions: 0,
+    extractionTime: 0,
+    resourceUsage: { cpu: 0, memory: 0 },
+    slowestComponents: [],
+    networkBottlenecks: [],
+  })
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const extractionStartTime = useRef<number | null>(null)
   const [extractionData, setExtractionData] = useState<ActionData | null>(null)
@@ -568,7 +578,7 @@ export default function ExtractPage() {
     setManualDebug('')
     extractionStartTime.current = Date.now()
     setIsPolling(true)
-    setIsButtonLoading(false) // Clear button loading state as we're now in polling state
+    setIsButtonLoading(false)
 
     const formData = new FormData()
     formData.append('url', url)
@@ -863,167 +873,189 @@ export default function ExtractPage() {
                     <h3 className='text-sm font-medium dark:text-gray-200'>
                       Filter Components
                     </h3>
+
                     <div className='flex gap-2'>
                       <Button
-                        variant='ghost'
+                        variant='outline'
                         size='sm'
+                        onClick={() => setShowFilterMenu(!showFilterMenu)}
                         className='text-xs h-7 px-2'
-                        onClick={() =>
-                          setSelectedTypes(COMPONENT_TYPES.map((t) => t.id))
-                        }
-                        disabled={
-                          selectedTypes.length === COMPONENT_TYPES.length
-                        }
                       >
-                        Select All
+                        <Filter className='h-4 w-4 mr-2' />
+                        {showFilterMenu ? 'Hide Filters' : 'Show Filters'}
                       </Button>
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        className='text-xs h-7 px-2'
-                        onClick={() => setSelectedTypes([])}
-                        disabled={selectedTypes.length === 0}
-                      >
-                        Clear All
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Search Filter */}
-                  <div className='relative mb-3'>
-                    <Input
-                      type='text'
-                      placeholder='Search components...'
-                      className='pl-8 text-sm'
-                      value={searchFilter}
-                      onChange={(e) => setSearchFilter(e.target.value)}
-                    />
-                    <div className='absolute left-2.5 top-1/2 transform -translate-y-1/2'>
-                      <svg
-                        xmlns='http://www.w3.org/2000/svg'
-                        width='16'
-                        height='16'
-                        viewBox='0 0 24 24'
-                        fill='none'
-                        stroke='currentColor'
-                        strokeWidth='2'
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        className='text-gray-400'
-                      >
-                        <circle cx='11' cy='11' r='8'></circle>
-                        <line x1='21' y1='21' x2='16.65' y2='16.65'></line>
-                      </svg>
-                    </div>
-                    {searchFilter && (
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        className='absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0'
-                        onClick={() => setSearchFilter('')}
-                      >
-                        <svg
-                          xmlns='http://www.w3.org/2000/svg'
-                          width='14'
-                          height='14'
-                          viewBox='0 0 24 24'
-                          fill='none'
-                          stroke='currentColor'
-                          strokeWidth='2'
-                          strokeLinecap='round'
-                          strokeLinejoin='round'
-                        >
-                          <line x1='18' y1='6' x2='6' y2='18'></line>
-                          <line x1='6' y1='6' x2='18' y2='18'></line>
-                        </svg>
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Active Filters */}
-                  {selectedTypes.length > 0 && (
-                    <div className='flex flex-wrap gap-2 mb-3'>
-                      {selectedTypes.map((typeId) => {
-                        const type = COMPONENT_TYPES.find(
-                          (t) => t.id === typeId,
-                        )
-                        return (
-                          <Badge
-                            key={typeId}
-                            variant='secondary'
-                            className='pl-2 pr-1 py-1 flex items-center gap-1 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-night-500 dark:text-periwinkle-400 dark:hover:bg-night-600'
+                      {showFilterMenu && (
+                        <>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='text-xs h-7 px-2'
+                            onClick={() =>
+                              setSelectedTypes(COMPONENT_TYPES.map((t) => t.id))
+                            }
+                            disabled={
+                              selectedTypes.length === COMPONENT_TYPES.length
+                            }
                           >
-                            {type?.label}
+                            Select All
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='text-xs h-7 px-2'
+                            onClick={() => setSelectedTypes([])}
+                            disabled={selectedTypes.length === 0}
+                          >
+                            Clear All
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {showFilterMenu && (
+                    <>
+                      {/* Search Filter */}
+                      <div className='relative mb-3'>
+                        <Input
+                          type='text'
+                          placeholder='Search components...'
+                          className='pl-8 text-sm'
+                          value={searchFilter}
+                          onChange={(e) => setSearchFilter(e.target.value)}
+                        />
+                        <div className='absolute left-2.5 top-1/2 transform -translate-y-1/2'>
+                          <svg
+                            xmlns='http://www.w3.org/2000/svg'
+                            width='16'
+                            height='16'
+                            viewBox='0 0 24 24'
+                            fill='none'
+                            stroke='currentColor'
+                            strokeWidth='2'
+                            strokeLinecap='round'
+                            strokeLinejoin='round'
+                            className='text-gray-400'
+                          >
+                            <circle cx='11' cy='11' r='8'></circle>
+                            <line x1='21' y1='21' x2='16.65' y2='16.65'></line>
+                          </svg>
+                        </div>
+                        {searchFilter && (
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0'
+                            onClick={() => setSearchFilter('')}
+                          >
+                            <svg
+                              xmlns='http://www.w3.org/2000/svg'
+                              width='14'
+                              height='14'
+                              viewBox='0 0 24 24'
+                              fill='none'
+                              stroke='currentColor'
+                              strokeWidth='2'
+                              strokeLinecap='round'
+                              strokeLinejoin='round'
+                            >
+                              <line x1='18' y1='6' x2='6' y2='18'></line>
+                              <line x1='6' y1='6' x2='18' y2='18'></line>
+                            </svg>
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Active Filters */}
+                      {selectedTypes.length > 0 && (
+                        <div className='flex flex-wrap gap-2 mb-3'>
+                          {selectedTypes.map((typeId) => {
+                            const type = COMPONENT_TYPES.find(
+                              (t) => t.id === typeId,
+                            )
+                            return (
+                              <Badge
+                                key={typeId}
+                                variant='secondary'
+                                className='pl-2 pr-1 py-1 flex items-center gap-1 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-night-500 dark:text-periwinkle-400 dark:hover:bg-night-600'
+                              >
+                                {type?.label}
+                                <Button
+                                  variant='ghost'
+                                  size='sm'
+                                  className='h-4 w-4 p-0 rounded-full'
+                                  onClick={() => toggleComponentType(typeId)}
+                                >
+                                  <svg
+                                    xmlns='http://www.w3.org/2000/svg'
+                                    width='10'
+                                    height='10'
+                                    viewBox='0 0 24 24'
+                                    fill='none'
+                                    stroke='currentColor'
+                                    strokeWidth='2'
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                  >
+                                    <line x1='18' y1='6' x2='6' y2='18'></line>
+                                    <line x1='6' y1='6' x2='18' y2='18'></line>
+                                  </svg>
+                                </Button>
+                              </Badge>
+                            )
+                          })}
+
+                          {selectedTypes.length > 0 && (
                             <Button
                               variant='ghost'
                               size='sm'
-                              className='h-4 w-4 p-0 rounded-full'
-                              onClick={() => toggleComponentType(typeId)}
+                              className='h-6 text-xs px-2'
+                              onClick={() => setSelectedTypes([])}
                             >
-                              <svg
-                                xmlns='http://www.w3.org/2000/svg'
-                                width='10'
-                                height='10'
-                                viewBox='0 0 24 24'
-                                fill='none'
-                                stroke='currentColor'
-                                strokeWidth='2'
-                                strokeLinecap='round'
-                                strokeLinejoin='round'
-                              >
-                                <line x1='18' y1='6' x2='6' y2='18'></line>
-                                <line x1='6' y1='6' x2='18' y2='18'></line>
-                              </svg>
+                              Clear Filters
                             </Button>
-                          </Badge>
-                        )
-                      })}
-
-                      {selectedTypes.length > 0 && (
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          className='h-6 text-xs px-2'
-                          onClick={() => setSelectedTypes([])}
-                        >
-                          Clear Filters
-                        </Button>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
 
-                  {/* Filter Categories */}
-                  <div className='grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2'>
-                    {COMPONENT_TYPES.map((type) => (
-                      <div
-                        key={type.id}
-                        className={`flex items-center space-x-2 p-1 rounded ${
-                          selectedTypes.includes(type.id) ? 'bg-blue-50' : ''
-                        }`}
-                      >
-                        <Checkbox
-                          id={`filter-${type.id}`}
-                          checked={selectedTypes.includes(type.id)}
-                          onCheckedChange={() => toggleComponentType(type.id)}
-                          className={
-                            selectedTypes.includes(type.id)
-                              ? 'text-blue-600'
-                              : ''
-                          }
-                        />
-                        <Label
-                          htmlFor={`filter-${type.id}`}
-                          className={`text-sm ${
-                            selectedTypes.includes(type.id)
-                              ? 'font-medium text-blue-700 dark:text-periwinkle-400'
-                              : 'dark:text-gray-300'
-                          }`}
-                        >
-                          {type.label}
-                        </Label>
+                      {/* Filter Categories */}
+                      <div className='grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2'>
+                        {COMPONENT_TYPES.map((type) => (
+                          <div
+                            key={type.id}
+                            className={`flex items-center space-x-2 p-1 rounded ${
+                              selectedTypes.includes(type.id)
+                                ? 'bg-blue-50'
+                                : ''
+                            }`}
+                          >
+                            <Checkbox
+                              id={`filter-${type.id}`}
+                              checked={selectedTypes.includes(type.id)}
+                              onCheckedChange={() =>
+                                toggleComponentType(type.id)
+                              }
+                              className={
+                                selectedTypes.includes(type.id)
+                                  ? 'text-blue-600'
+                                  : ''
+                              }
+                            />
+                            <Label
+                              htmlFor={`filter-${type.id}`}
+                              className={`text-sm ${
+                                selectedTypes.includes(type.id)
+                                  ? 'font-medium text-blue-700 dark:text-periwinkle-400'
+                                  : 'dark:text-gray-300'
+                              }`}
+                            >
+                              {type.label}
+                            </Label>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
