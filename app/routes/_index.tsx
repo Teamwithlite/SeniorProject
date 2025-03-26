@@ -9,6 +9,7 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Slider } from '~/components/ui/slider'
 import { Label } from '~/components/ui/label'
+import { SearchResultsBar } from '~/components/SearchResultsBar'
 import { Checkbox } from '~/components/ui/checkbox'
 import {
   Select,
@@ -311,6 +312,118 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
   )
 }
 
+function LoadingScreen({
+  message,
+  progress = 0,
+  details = '',
+  elapsedTime = 0,
+}: {
+  message: string
+  progress?: number
+  details?: string
+  elapsedTime?: number
+}) {
+  // Determine which phase we're in based on progress
+  const isExtractionPhase = progress < 70
+  const isPreviewPhase = progress >= 70 && progress < 100
+
+  // Calculate phase-specific progress
+  const extractionProgress = isExtractionPhase
+    ? Math.min(100, (progress / 70) * 100)
+    : 100
+
+  const previewProgress = isPreviewPhase
+    ? Math.min(100, ((progress - 70) / 30) * 100)
+    : progress === 100
+      ? 100
+      : 0
+
+  return (
+    <div className='fixed inset-0 flex items-center justify-center bg-white bg-opacity-90 dark:bg-night-900 dark:bg-opacity-90 z-50'>
+      <div className='text-center max-w-md w-full p-6 bg-white dark:bg-night-800 rounded-lg shadow-2xl'>
+        <div className='mb-6'>
+          <Loader2 className='mx-auto h-12 w-12 text-blue-600 dark:text-periwinkle-400 animate-spin' />
+        </div>
+
+        <h2 className='text-xl font-semibold mb-4 dark:text-gray-200'>
+          {message}
+        </h2>
+
+        {/* Phase Indicators */}
+        <div className='grid grid-cols-2 gap-2 mb-3'>
+          <div className='text-center'>
+            <div
+              className={`text-xs font-medium mb-1 ${isExtractionPhase ? 'text-blue-600 dark:text-periwinkle-400' : 'text-gray-400 dark:text-gray-500'}`}
+            >
+              <div className='flex items-center justify-center gap-1'>
+                {isExtractionPhase && (
+                  <span className='flex h-2 w-2 relative'>
+                    <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75'></span>
+                    <span className='relative inline-flex rounded-full h-2 w-2 bg-blue-600'></span>
+                  </span>
+                )}
+                Extraction
+              </div>
+            </div>
+            <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2 overflow-hidden'>
+              <div
+                className={`${isExtractionPhase ? 'bg-blue-600 dark:bg-periwinkle-400' : 'bg-green-500'} h-2 rounded-full transition-all duration-300`}
+                style={{ width: `${extractionProgress}%` }}
+              />
+            </div>
+          </div>
+          <div className='text-center'>
+            <div
+              className={`text-xs font-medium mb-1 ${isPreviewPhase ? 'text-blue-600 dark:text-periwinkle-400' : previewProgress === 100 ? 'text-green-500' : 'text-gray-400 dark:text-gray-500'}`}
+            >
+              <div className='flex items-center justify-center gap-1'>
+                {isPreviewPhase && (
+                  <span className='flex h-2 w-2 relative'>
+                    <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75'></span>
+                    <span className='relative inline-flex rounded-full h-2 w-2 bg-blue-600'></span>
+                  </span>
+                )}
+                Preview Generation
+              </div>
+            </div>
+            <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2 overflow-hidden'>
+              <div
+                className={`${isPreviewPhase ? 'bg-blue-600 dark:bg-periwinkle-400' : previewProgress === 100 ? 'bg-green-500' : 'bg-gray-300 dark:bg-night-500'} h-2 rounded-full transition-all duration-300`}
+                style={{ width: `${previewProgress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Overall Progress Bar */}
+        <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2.5 mb-4 overflow-hidden'>
+          <div
+            className='bg-blue-600 dark:bg-periwinkle-400 h-2.5 rounded-full transition-all duration-300'
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        <div className='text-sm text-gray-600 dark:text-gray-400 mb-2'>
+          {progress}% Complete
+          {elapsedTime > 0 && ` (${elapsedTime}s)`}
+        </div>
+
+        {details && (
+          <p className='text-xs text-gray-500 dark:text-gray-300 italic'>
+            {details}
+          </p>
+        )}
+
+        {elapsedTime > 30 && (
+          <div className='mt-4 text-yellow-600 dark:text-yellow-400 text-xs'>
+            Extraction is taking longer than expected...
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function ExtractPage() {
   const loaderData = useLoaderData<typeof loader>()
   const navigate = useNavigate()
@@ -321,6 +434,7 @@ export default function ExtractPage() {
   const [page, setPage] = useState(1)
   const [componentsPerPage, setComponentsPerPage] = useState(10)
   const [isPolling, setIsPolling] = useState(false)
+  const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [manualDebug, setManualDebug] = useState<string>('')
   const [selectedComponent, setSelectedComponent] = useState<string | null>(
@@ -336,6 +450,15 @@ export default function ExtractPage() {
   const [copiedCustom, setCopiedCustom] = useState(false)
   const [savedLinks, setSavedLinks] = useState<string[]>([])
   const [showSavedLinks, setShowSavedLinks] = useState(false)
+  const [extractionMetrics, setExtractionMetrics] = useState({
+    totalElements: 0,
+    extractedElements: 0,
+    failedExtractions: 0,
+    extractionTime: 0,
+    resourceUsage: { cpu: 0, memory: 0 },
+    slowestComponents: [],
+    networkBottlenecks: [],
+  })
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const extractionStartTime = useRef<number | null>(null)
   const [extractionData, setExtractionData] = useState<ActionData | null>(null)
@@ -568,7 +691,7 @@ export default function ExtractPage() {
     setManualDebug('')
     extractionStartTime.current = Date.now()
     setIsPolling(true)
-    setIsButtonLoading(false) // Clear button loading state as we're now in polling state
+    setIsButtonLoading(false)
 
     const formData = new FormData()
     formData.append('url', url)
@@ -786,8 +909,31 @@ export default function ExtractPage() {
     }
   }
 
+  const showLoadingScreen =
+    isPolling ||
+    isButtonLoading ||
+    extractionData?.status === 'pending' ||
+    extractionData?.status === 'processing' ||
+    (extractionData?.components && extractionData.components.length === 0)
+
   return (
     <div className='container mx-auto p-6'>
+      {showLoadingScreen && (
+        <LoadingScreen
+          message={
+            isPolling
+              ? 'Extracting components...'
+              : extractionData?.status === 'pending'
+                ? 'Preparing extraction...'
+                : extractionData?.status === 'processing'
+                  ? 'Processing components...'
+                  : 'Initializing...'
+          }
+          progress={extractionData?.progress || 0}
+          details={extractionData?.statusDetails}
+          elapsedTime={elapsedTime}
+        />
+      )}
       <Card className='max-w-6xl mx-auto dark:bg-night-300 dark:border-night-600'>
         <CardHeader className='dark:bg-night-400'>
           <CardTitle className='dark:text-gray-100'>
@@ -863,167 +1009,189 @@ export default function ExtractPage() {
                     <h3 className='text-sm font-medium dark:text-gray-200'>
                       Filter Components
                     </h3>
+
                     <div className='flex gap-2'>
                       <Button
-                        variant='ghost'
+                        variant='outline'
                         size='sm'
+                        onClick={() => setShowFilterMenu(!showFilterMenu)}
                         className='text-xs h-7 px-2'
-                        onClick={() =>
-                          setSelectedTypes(COMPONENT_TYPES.map((t) => t.id))
-                        }
-                        disabled={
-                          selectedTypes.length === COMPONENT_TYPES.length
-                        }
                       >
-                        Select All
+                        <Filter className='h-4 w-4 mr-2' />
+                        {showFilterMenu ? 'Hide Filters' : 'Show Filters'}
                       </Button>
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        className='text-xs h-7 px-2'
-                        onClick={() => setSelectedTypes([])}
-                        disabled={selectedTypes.length === 0}
-                      >
-                        Clear All
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Search Filter */}
-                  <div className='relative mb-3'>
-                    <Input
-                      type='text'
-                      placeholder='Search components...'
-                      className='pl-8 text-sm'
-                      value={searchFilter}
-                      onChange={(e) => setSearchFilter(e.target.value)}
-                    />
-                    <div className='absolute left-2.5 top-1/2 transform -translate-y-1/2'>
-                      <svg
-                        xmlns='http://www.w3.org/2000/svg'
-                        width='16'
-                        height='16'
-                        viewBox='0 0 24 24'
-                        fill='none'
-                        stroke='currentColor'
-                        strokeWidth='2'
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        className='text-gray-400'
-                      >
-                        <circle cx='11' cy='11' r='8'></circle>
-                        <line x1='21' y1='21' x2='16.65' y2='16.65'></line>
-                      </svg>
-                    </div>
-                    {searchFilter && (
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        className='absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0'
-                        onClick={() => setSearchFilter('')}
-                      >
-                        <svg
-                          xmlns='http://www.w3.org/2000/svg'
-                          width='14'
-                          height='14'
-                          viewBox='0 0 24 24'
-                          fill='none'
-                          stroke='currentColor'
-                          strokeWidth='2'
-                          strokeLinecap='round'
-                          strokeLinejoin='round'
-                        >
-                          <line x1='18' y1='6' x2='6' y2='18'></line>
-                          <line x1='6' y1='6' x2='18' y2='18'></line>
-                        </svg>
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Active Filters */}
-                  {selectedTypes.length > 0 && (
-                    <div className='flex flex-wrap gap-2 mb-3'>
-                      {selectedTypes.map((typeId) => {
-                        const type = COMPONENT_TYPES.find(
-                          (t) => t.id === typeId,
-                        )
-                        return (
-                          <Badge
-                            key={typeId}
-                            variant='secondary'
-                            className='pl-2 pr-1 py-1 flex items-center gap-1 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-night-500 dark:text-periwinkle-400 dark:hover:bg-night-600'
+                      {showFilterMenu && (
+                        <>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='text-xs h-7 px-2'
+                            onClick={() =>
+                              setSelectedTypes(COMPONENT_TYPES.map((t) => t.id))
+                            }
+                            disabled={
+                              selectedTypes.length === COMPONENT_TYPES.length
+                            }
                           >
-                            {type?.label}
+                            Select All
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='text-xs h-7 px-2'
+                            onClick={() => setSelectedTypes([])}
+                            disabled={selectedTypes.length === 0}
+                          >
+                            Clear All
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {showFilterMenu && (
+                    <>
+                      {/* Search Filter */}
+                      <div className='relative mb-3'>
+                        <Input
+                          type='text'
+                          placeholder='Search components...'
+                          className='pl-8 text-sm'
+                          value={searchFilter}
+                          onChange={(e) => setSearchFilter(e.target.value)}
+                        />
+                        <div className='absolute left-2.5 top-1/2 transform -translate-y-1/2'>
+                          <svg
+                            xmlns='http://www.w3.org/2000/svg'
+                            width='16'
+                            height='16'
+                            viewBox='0 0 24 24'
+                            fill='none'
+                            stroke='currentColor'
+                            strokeWidth='2'
+                            strokeLinecap='round'
+                            strokeLinejoin='round'
+                            className='text-gray-400'
+                          >
+                            <circle cx='11' cy='11' r='8'></circle>
+                            <line x1='21' y1='21' x2='16.65' y2='16.65'></line>
+                          </svg>
+                        </div>
+                        {searchFilter && (
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0'
+                            onClick={() => setSearchFilter('')}
+                          >
+                            <svg
+                              xmlns='http://www.w3.org/2000/svg'
+                              width='14'
+                              height='14'
+                              viewBox='0 0 24 24'
+                              fill='none'
+                              stroke='currentColor'
+                              strokeWidth='2'
+                              strokeLinecap='round'
+                              strokeLinejoin='round'
+                            >
+                              <line x1='18' y1='6' x2='6' y2='18'></line>
+                              <line x1='6' y1='6' x2='18' y2='18'></line>
+                            </svg>
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Active Filters */}
+                      {selectedTypes.length > 0 && (
+                        <div className='flex flex-wrap gap-2 mb-3'>
+                          {selectedTypes.map((typeId) => {
+                            const type = COMPONENT_TYPES.find(
+                              (t) => t.id === typeId,
+                            )
+                            return (
+                              <Badge
+                                key={typeId}
+                                variant='secondary'
+                                className='pl-2 pr-1 py-1 flex items-center gap-1 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-night-500 dark:text-periwinkle-400 dark:hover:bg-night-600'
+                              >
+                                {type?.label}
+                                <Button
+                                  variant='ghost'
+                                  size='sm'
+                                  className='h-4 w-4 p-0 rounded-full'
+                                  onClick={() => toggleComponentType(typeId)}
+                                >
+                                  <svg
+                                    xmlns='http://www.w3.org/2000/svg'
+                                    width='10'
+                                    height='10'
+                                    viewBox='0 0 24 24'
+                                    fill='none'
+                                    stroke='currentColor'
+                                    strokeWidth='2'
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                  >
+                                    <line x1='18' y1='6' x2='6' y2='18'></line>
+                                    <line x1='6' y1='6' x2='18' y2='18'></line>
+                                  </svg>
+                                </Button>
+                              </Badge>
+                            )
+                          })}
+
+                          {selectedTypes.length > 0 && (
                             <Button
                               variant='ghost'
                               size='sm'
-                              className='h-4 w-4 p-0 rounded-full'
-                              onClick={() => toggleComponentType(typeId)}
+                              className='h-6 text-xs px-2'
+                              onClick={() => setSelectedTypes([])}
                             >
-                              <svg
-                                xmlns='http://www.w3.org/2000/svg'
-                                width='10'
-                                height='10'
-                                viewBox='0 0 24 24'
-                                fill='none'
-                                stroke='currentColor'
-                                strokeWidth='2'
-                                strokeLinecap='round'
-                                strokeLinejoin='round'
-                              >
-                                <line x1='18' y1='6' x2='6' y2='18'></line>
-                                <line x1='6' y1='6' x2='18' y2='18'></line>
-                              </svg>
+                              Clear Filters
                             </Button>
-                          </Badge>
-                        )
-                      })}
-
-                      {selectedTypes.length > 0 && (
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          className='h-6 text-xs px-2'
-                          onClick={() => setSelectedTypes([])}
-                        >
-                          Clear Filters
-                        </Button>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
 
-                  {/* Filter Categories */}
-                  <div className='grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2'>
-                    {COMPONENT_TYPES.map((type) => (
-                      <div
-                        key={type.id}
-                        className={`flex items-center space-x-2 p-1 rounded ${
-                          selectedTypes.includes(type.id) ? 'bg-blue-50' : ''
-                        }`}
-                      >
-                        <Checkbox
-                          id={`filter-${type.id}`}
-                          checked={selectedTypes.includes(type.id)}
-                          onCheckedChange={() => toggleComponentType(type.id)}
-                          className={
-                            selectedTypes.includes(type.id)
-                              ? 'text-blue-600'
-                              : ''
-                          }
-                        />
-                        <Label
-                          htmlFor={`filter-${type.id}`}
-                          className={`text-sm ${
-                            selectedTypes.includes(type.id)
-                              ? 'font-medium text-blue-700 dark:text-periwinkle-400'
-                              : 'dark:text-gray-300'
-                          }`}
-                        >
-                          {type.label}
-                        </Label>
+                      {/* Filter Categories */}
+                      <div className='grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2'>
+                        {COMPONENT_TYPES.map((type) => (
+                          <div
+                            key={type.id}
+                            className={`flex items-center space-x-2 p-1 rounded ${
+                              selectedTypes.includes(type.id)
+                                ? 'bg-blue-50'
+                                : ''
+                            }`}
+                          >
+                            <Checkbox
+                              id={`filter-${type.id}`}
+                              checked={selectedTypes.includes(type.id)}
+                              onCheckedChange={() =>
+                                toggleComponentType(type.id)
+                              }
+                              className={
+                                selectedTypes.includes(type.id)
+                                  ? 'text-blue-600'
+                                  : ''
+                              }
+                            />
+                            <Label
+                              htmlFor={`filter-${type.id}`}
+                              className={`text-sm ${
+                                selectedTypes.includes(type.id)
+                                  ? 'font-medium text-blue-700 dark:text-periwinkle-400'
+                                  : 'dark:text-gray-300'
+                              }`}
+                            >
+                              {type.label}
+                            </Label>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1113,6 +1281,15 @@ export default function ExtractPage() {
             extractionData.components.length > 0 ? (
               <div className='mt-4'>
                 <div className='space-y-4'>
+                  <SearchResultsBar
+                    totalResults={filteredComponents.length}
+                    extractionTime={
+                      extractionStartTime.current
+                        ? (Date.now() - extractionStartTime.current) / 1000
+                        : 0
+                    }
+                    searchQuery={url}
+                  />
                   {filteredComponents.map((component, index) => (
                     <ComponentPreview
                       key={`${component.type}-${index}`}
