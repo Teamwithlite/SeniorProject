@@ -9,6 +9,7 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Slider } from '~/components/ui/slider'
 import { Label } from '~/components/ui/label'
+import { SearchResultsBar } from '~/components/SearchResultsBar'
 import { Checkbox } from '~/components/ui/checkbox'
 import {
   Select,
@@ -322,6 +323,21 @@ function LoadingScreen({
   details?: string
   elapsedTime?: number
 }) {
+  // Determine which phase we're in based on progress
+  const isExtractionPhase = progress < 70
+  const isPreviewPhase = progress >= 70 && progress < 100
+
+  // Calculate phase-specific progress
+  const extractionProgress = isExtractionPhase
+    ? Math.min(100, (progress / 70) * 100)
+    : 100
+
+  const previewProgress = isPreviewPhase
+    ? Math.min(100, ((progress - 70) / 30) * 100)
+    : progress === 100
+      ? 100
+      : 0
+
   return (
     <div className='fixed inset-0 flex items-center justify-center bg-white bg-opacity-90 dark:bg-night-900 dark:bg-opacity-90 z-50'>
       <div className='text-center max-w-md w-full p-6 bg-white dark:bg-night-800 rounded-lg shadow-2xl'>
@@ -333,7 +349,53 @@ function LoadingScreen({
           {message}
         </h2>
 
-        {/* Progress Bar */}
+        {/* Phase Indicators */}
+        <div className='grid grid-cols-2 gap-2 mb-3'>
+          <div className='text-center'>
+            <div
+              className={`text-xs font-medium mb-1 ${isExtractionPhase ? 'text-blue-600 dark:text-periwinkle-400' : 'text-gray-400 dark:text-gray-500'}`}
+            >
+              <div className='flex items-center justify-center gap-1'>
+                {isExtractionPhase && (
+                  <span className='flex h-2 w-2 relative'>
+                    <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75'></span>
+                    <span className='relative inline-flex rounded-full h-2 w-2 bg-blue-600'></span>
+                  </span>
+                )}
+                Extraction
+              </div>
+            </div>
+            <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2 overflow-hidden'>
+              <div
+                className={`${isExtractionPhase ? 'bg-blue-600 dark:bg-periwinkle-400' : 'bg-green-500'} h-2 rounded-full transition-all duration-300`}
+                style={{ width: `${extractionProgress}%` }}
+              />
+            </div>
+          </div>
+          <div className='text-center'>
+            <div
+              className={`text-xs font-medium mb-1 ${isPreviewPhase ? 'text-blue-600 dark:text-periwinkle-400' : previewProgress === 100 ? 'text-green-500' : 'text-gray-400 dark:text-gray-500'}`}
+            >
+              <div className='flex items-center justify-center gap-1'>
+                {isPreviewPhase && (
+                  <span className='flex h-2 w-2 relative'>
+                    <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75'></span>
+                    <span className='relative inline-flex rounded-full h-2 w-2 bg-blue-600'></span>
+                  </span>
+                )}
+                Preview Generation
+              </div>
+            </div>
+            <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2 overflow-hidden'>
+              <div
+                className={`${isPreviewPhase ? 'bg-blue-600 dark:bg-periwinkle-400' : previewProgress === 100 ? 'bg-green-500' : 'bg-gray-300 dark:bg-night-500'} h-2 rounded-full transition-all duration-300`}
+                style={{ width: `${previewProgress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Overall Progress Bar */}
         <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2.5 mb-4 overflow-hidden'>
           <div
             className='bg-blue-600 dark:bg-periwinkle-400 h-2.5 rounded-full transition-all duration-300'
@@ -1219,6 +1281,15 @@ export default function ExtractPage() {
             extractionData.components.length > 0 ? (
               <div className='mt-4'>
                 <div className='space-y-4'>
+                  <SearchResultsBar
+                    totalResults={filteredComponents.length}
+                    extractionTime={
+                      extractionStartTime.current
+                        ? (Date.now() - extractionStartTime.current) / 1000
+                        : 0
+                    }
+                    searchQuery={url}
+                  />
                   {filteredComponents.map((component, index) => (
                     <ComponentPreview
                       key={`${component.type}-${index}`}
