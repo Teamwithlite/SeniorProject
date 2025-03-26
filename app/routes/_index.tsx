@@ -311,6 +311,57 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
   )
 }
 
+function LoadingScreen({
+  message,
+  progress = 0,
+  details = '',
+  elapsedTime = 0,
+}: {
+  message: string
+  progress?: number
+  details?: string
+  elapsedTime?: number
+}) {
+  return (
+    <div className='fixed inset-0 flex items-center justify-center bg-white bg-opacity-90 dark:bg-night-900 dark:bg-opacity-90 z-50'>
+      <div className='text-center max-w-md w-full p-6 bg-white dark:bg-night-800 rounded-lg shadow-2xl'>
+        <div className='mb-6'>
+          <Loader2 className='mx-auto h-12 w-12 text-blue-600 dark:text-periwinkle-400 animate-spin' />
+        </div>
+
+        <h2 className='text-xl font-semibold mb-4 dark:text-gray-200'>
+          {message}
+        </h2>
+
+        {/* Progress Bar */}
+        <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2.5 mb-4 overflow-hidden'>
+          <div
+            className='bg-blue-600 dark:bg-periwinkle-400 h-2.5 rounded-full transition-all duration-300'
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        <div className='text-sm text-gray-600 dark:text-gray-400 mb-2'>
+          {progress}% Complete
+          {elapsedTime > 0 && ` (${elapsedTime}s)`}
+        </div>
+
+        {details && (
+          <p className='text-xs text-gray-500 dark:text-gray-300 italic'>
+            {details}
+          </p>
+        )}
+
+        {elapsedTime > 30 && (
+          <div className='mt-4 text-yellow-600 dark:text-yellow-400 text-xs'>
+            Extraction is taking longer than expected...
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function ExtractPage() {
   const loaderData = useLoaderData<typeof loader>()
   const navigate = useNavigate()
@@ -796,8 +847,31 @@ export default function ExtractPage() {
     }
   }
 
+  const showLoadingScreen =
+    isPolling ||
+    isButtonLoading ||
+    extractionData?.status === 'pending' ||
+    extractionData?.status === 'processing' ||
+    (extractionData?.components && extractionData.components.length === 0)
+
   return (
     <div className='container mx-auto p-6'>
+      {showLoadingScreen && (
+        <LoadingScreen
+          message={
+            isPolling
+              ? 'Extracting components...'
+              : extractionData?.status === 'pending'
+                ? 'Preparing extraction...'
+                : extractionData?.status === 'processing'
+                  ? 'Processing components...'
+                  : 'Initializing...'
+          }
+          progress={extractionData?.progress || 0}
+          details={extractionData?.statusDetails}
+          elapsedTime={elapsedTime}
+        />
+      )}
       <Card className='max-w-6xl mx-auto dark:bg-night-300 dark:border-night-600'>
         <CardHeader className='dark:bg-night-400'>
           <CardTitle className='dark:text-gray-100'>
