@@ -44,7 +44,8 @@ export const action: ActionFunction = async ({ request }) => {
 
     const extractedData = await extractWebsite(url, options)
     console.log(
-      `Extraction complete. Found ${extractedData.components.length} components`,
+      `Extraction complete. Found ${extractedData.components.length} components `,
+      url,
     )
 
     // Sort components by importance score for faster display of key elements
@@ -60,8 +61,10 @@ export const action: ActionFunction = async ({ request }) => {
       components: sortedComponents,
       componentsFound: extractedData.components.length,
       componentsProcessed: extractedData.components.length,
-      message: `Extraction complete. Found ${extractedData.components.length} components.`,
+      message: `Extraction complete. Found ${extractedData.components.length} components??? `,
+      url,
       progress: 100,
+      metrics: extractedData.metrics,
     })
   } catch (error) {
     console.error('Extraction failed:', error)

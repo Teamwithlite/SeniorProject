@@ -20,157 +20,75 @@ const config = {
     },
     extend: {
       colors: {
-        // New color palette
-        nyanza: {
-          DEFAULT: '#d6f6dd',
-          100: '#114b1d',
-          200: '#21973b',
-          300: '#3fd55f',
-          400: '#8ae59e',
-          500: '#d6f6dd',
-          600: '#def8e3',
-          700: '#e6f9ea',
-          800: '#eefbf1',
-          900: '#f7fdf8',
+        midnight: {
+          DEFAULT: '#121826',
+          100: '#0c0f1a',
+          200: '#191d2e',
+          300: '#232a41',
+          400: '#2e364d',
+          500: '#384157',
+          600: '#424a63',
+          700: '#4c546f',
+          800: '#565f7b',
+          900: '#606987',
         },
-        periwinkle: {
-          DEFAULT: '#dac4f7',
-          100: '#280b4e',
-          200: '#50159c',
-          300: '#7928e2',
-          400: '#aa77ec',
-          500: '#dac4f7',
-          600: '#e2d0f9',
-          700: '#e9dcfa',
-          800: '#f0e8fc',
-          900: '#f8f3fd',
+        deep_ocean: {
+          DEFAULT: '#183d5d',
+          100: '#0f2b40',
+          200: '#163b5a',
+          300: '#1d4b75',
+          400: '#24608f',
+          500: '#2b75a9',
+          600: '#338acc',
+          700: '#3b9fe0',
+          800: '#45b4f4',
+          900: '#50c9ff',
         },
-        salmon_pink: {
-          DEFAULT: '#f4989c',
-          100: '#48080b',
-          200: '#900f16',
-          300: '#d81720',
-          400: '#ed5159',
-          500: '#f4989c',
-          600: '#f6aeb1',
-          700: '#f9c2c5',
-          800: '#fbd6d8',
-          900: '#fdebec',
+        dusk: {
+          DEFAULT: '#4a2c47',
+          100: '#2e1b2e',
+          200: '#43283e',
+          300: '#5a3550',
+          400: '#714563',
+          500: '#895376',
+          600: '#a06289',
+          700: '#b9729c',
+          800: '#d282b0',
+          900: '#eb92c3',
         },
-        dun: {
-          DEFAULT: '#ebd2b4',
-          100: '#412c11',
-          200: '#835723',
-          300: '#c48334',
-          400: '#d9aa71',
-          500: '#ebd2b4',
-          600: '#efdac2',
-          700: '#f3e4d1',
-          800: '#f7ede0',
-          900: '#fbf6f0',
+        forest_night: {
+          DEFAULT: '#1e2b26',
+          100: '#141d1a',
+          200: '#1c2a23',
+          300: '#26392e',
+          400: '#304938',
+          500: '#3a5943',
+          600: '#44694e',
+          700: '#4e7959',
+          800: '#588963',
+          900: '#62996e',
         },
-
-        // Night mode colors
-        night: {
-          DEFAULT: '#121212', // Main black
-          100: '#000000', // Pure black
-          200: '#0a0a0a', // Very dark black
-          300: '#121212', // Dark gray (material dark)
-          400: '#181818', // Slightly lighter
-          500: '#202020', // Medium dark gray
-          600: '#282828', // Dark charcoal
-          700: '#303030', // Charcoal
-          800: '#383838', // Dark slate
-          900: '#404040', // Slate gray
-        },
-
-        // Theme structure
-        background: '#d6f6dd', // nyanza as default background
-        foreground: '#280b4e', // periwinkle-100 for contrast
-
+        background: '#121826',
+        foreground: '#d9d9d9',
         primary: {
-          DEFAULT: '#dac4f7', // periwinkle
-          foreground: '#f7fdf8', // nyanza-900
+          DEFAULT: '#183d5d',
+          foreground: '#ffffff',
         },
-
         secondary: {
-          DEFAULT: '#f4989c', // salmon_pink
-          foreground: '#280b4e', // periwinkle-100
+          DEFAULT: '#4a2c47',
+          foreground: '#e0c5db',
         },
-
         accent: {
-          DEFAULT: '#ebd2b4', // dun
-          foreground: '#114b1d', // nyanza-100
+          DEFAULT: '#1e2b26',
+          foreground: '#a7d1a3',
         },
-
         muted: {
-          DEFAULT: '#e6f9ea', // nyanza-700
-          foreground: '#50159c', // periwinkle-200
+          DEFAULT: '#3a5943',
+          foreground: '#9db79e',
         },
-
-        card: {
-          DEFAULT: '#f7fdf8', // nyanza-900
-          foreground: '#280b4e', // periwinkle-100
-        },
-
-        popover: {
-          DEFAULT: '#f7fdf8', // nyanza-900
-          foreground: '#280b4e', // periwinkle-100
-        },
-
-        border: '#8ae59e', // nyanza-400
-        input: '#e9dcfa', // periwinkle-700
-        ring: '#f6aeb1', // salmon_pink-600
-
-        // Dark mode variants
-        dark: {
-          background: '#121212', // night-300 for main background
-          foreground: '#e0e0e0', // Light gray text for contrast
-
-          primary: {
-            DEFAULT: '#282828', // night-600
-            foreground: '#e0e0e0', // Light gray text
-          },
-
-          secondary: {
-            DEFAULT: '#202020', // night-500
-            foreground: '#f6aeb1', // salmon_pink-600 for accent
-          },
-
-          accent: {
-            DEFAULT: '#303030', // night-700
-            foreground: '#dac4f7', // periwinkle for contrast
-          },
-
-          muted: {
-            DEFAULT: '#181818', // night-400
-            foreground: '#a0a0a0', // Medium gray text
-          },
-
-          card: {
-            DEFAULT: '#1a1a1a', // Slightly lighter than background
-            foreground: '#e0e0e0', // Light gray text
-          },
-
-          popover: {
-            DEFAULT: '#1a1a1a', // Slightly lighter than background
-            foreground: '#e0e0e0', // Light gray text
-          },
-
-          border: '#303030', // night-700
-          input: '#202020', // night-500
-          ring: '#303030', // night-700
-        },
-
-        destructive: {
-          DEFAULT: '#900f16', // salmon_pink-200
-          foreground: '#fdebec', // salmon_pink-900
-        },
-
-        'dark-destructive': {
-          DEFAULT: '#ff3b46', // Brighter red for dark mode
-          foreground: '#000000', // Pure black for contrast
-        },
+        border: '#2e364d',
+        input: '#3a5943',
+        ring: '#24608f',
       },
       borderRadius: {
         lg: 'var(--radius)',

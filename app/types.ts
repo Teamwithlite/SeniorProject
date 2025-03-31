@@ -138,6 +138,38 @@ export interface ExtractedComponent {
   };
 }
 
+export interface ExtractionMetrics {
+  // Time metrics
+  extractionTimeMs: number;
+  responseTimeMs: number;
+  
+  // Accuracy metrics
+  layoutAccuracy: number;
+  styleAccuracy: number;
+  contentAccuracy: number;
+  overallAccuracy: number;
+  
+  // Component metrics
+  totalElementsDetected: number;
+  componentsExtracted: number;
+  extractionRate: number;
+  failedExtractions: number;
+  
+  // Precision metrics
+  positionAccuracy: number;
+  dimensionAccuracy: number;
+  marginPaddingAccuracy: number;
+  colorAccuracy: number;
+  fontAccuracy: number;
+  
+  // Error details
+  errors: Array<{type: string, message: string, count: number}>;
+  
+  // URL and timestamp
+  url: string;
+  timestamp: string;
+}
+
 export interface ActionData {
   success?: boolean;
   error?: string;
@@ -150,7 +182,9 @@ export interface ActionData {
   totalPages?: number;
   currentPage?: number;
   components?: ExtractedComponent[];
-  statusDetails?: string; // Additional status details for UI feedback
+  statusDetails?: string;
+  metrics?: ExtractionMetrics; // Add this line
+  url?: string; // Add this if it's used in your code
 }
 
 export interface LoaderData {

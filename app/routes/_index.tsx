@@ -1,15 +1,15 @@
-// app/routes/_index.tsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
 import { useFetcher, Link, useNavigate, useLoaderData } from '@remix-run/react'
+import { SearchResultsBar } from '@/components/SearchResultsBar'
+import ExtractionLoadingScreen from './loadingscreen'
+import { MetricsPanel, type ExtractionMetrics } from '~/components/MetricsPanel'
 
 // Shadcn UI components
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
-import { Slider } from '~/components/ui/slider'
 import { Label } from '~/components/ui/label'
-import { SearchResultsBar } from '~/components/SearchResultsBar'
 import { Checkbox } from '~/components/ui/checkbox'
 import {
   Select,
@@ -40,6 +40,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Chrome,
+  BarChart,
 } from 'lucide-react'
 
 // For code highlighting
@@ -92,32 +93,10 @@ const COMPONENT_TYPES = [
   { id: 'toggles', label: 'Toggles & Switches' },
   { id: 'progress', label: 'Progress Bars' },
 ]
-
 function ComponentPreview({ component }: { component: ExtractedComponent }) {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('preview')
-  const [scale, setScale] = useState(1)
-  const previewRef = useRef<HTMLDivElement>(null)
-
-  const adjustScale = useCallback(() => {
-    if (previewRef.current && component.metadata?.dimensions) {
-      const containerWidth = previewRef.current.clientWidth
-      const contentWidth = component.metadata.dimensions.width || 300
-      if (contentWidth > containerWidth) {
-        setScale(Math.max(0.5, containerWidth / contentWidth))
-      } else {
-        setScale(1)
-      }
-    }
-  }, [component.metadata?.dimensions])
-
-  useEffect(() => {
-    if (activeTab === 'preview') {
-      adjustScale()
-      window.addEventListener('resize', adjustScale)
-      return () => window.removeEventListener('resize', adjustScale)
-    }
-  }, [activeTab, adjustScale])
+  const iframeRef = useRef<HTMLIFrameElement>(null)
 
   const copyToClipboard = async () => {
     await navigator.clipboard.writeText(component.html)
@@ -125,67 +104,50 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Extract background color from component or context styles
-  const backgroundColor =
-    component.styles?._contextBackground ||
-    component.styles?.backgroundColor ||
-    '#ffffff'
-  const textColor =
-    component.styles?._contextColor || component.styles?.color || '#000000'
-
-  // Get original dimensions
-  const width = component.metadata?.dimensions?.width || 'auto'
-  const height = component.metadata?.dimensions?.height || 'auto'
-
-  // Generate preview HTML
   const previewHtml = useMemo(() => {
-    // If component has external styles, include them with the HTML
-    const html = component.cleanHtml || component.html
+    return `
+      <html>
+      <head>
+        <style>${component.metadata?.externalStyles || ''}</style>
+      </head>
+      <body style="margin: 0; padding: 10px;">${component.cleanHtml || component.html}</body>
+      </html>
+    `
+  }, [component.cleanHtml, component.html, component.metadata?.externalStyles])
 
-    // Wrap the component in a container that preserves original styling context
-    return {
-      __html: html,
+  useEffect(() => {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      const doc =
+        iframeRef.current.contentDocument ||
+        iframeRef.current.contentWindow.document
+      doc.open()
+      doc.write(previewHtml)
+      doc.close()
     }
-  }, [component.cleanHtml, component.html])
-
-  // Get component's original display mode
-  const displayMode = component.metadata?.originalStyles?.display || 'block'
+  }, [previewHtml, activeTab])
 
   return (
-    <Card className='mb-6 overflow-hidden border-2 border-periwinkle-200'>
-      <CardHeader className='bg-nyanza-100'>
+    <Card className='mb-6 overflow-hidden border-2 border-gray-200'>
+      <CardHeader className='bg-black'>
         <div className='flex items-center justify-between'>
-          <CardTitle className='text-lg flex items-center gap-2 text-white'>
+          <CardTitle className='text-lg flex items-center gap-2'>
             {component.name}
-            <Badge variant='secondary' className='text-xs'>
+            <span className='text-xs bg-gray-200 px-2 py-1 rounded'>
               {component.type || 'Component'}
-            </Badge>
+            </span>
           </CardTitle>
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={copyToClipboard}
-            className='text-white hover:text-nyanza-500'
-          >
+          <Button variant='ghost' size='sm' onClick={copyToClipboard}>
             {copied ? (
-              <>
-                <Check className='h-4 w-4 mr-2' /> Copied!
-              </>
+              <Check className='h-4 w-4 mr-2' />
             ) : (
-              <>
-                <Copy className='h-4 w-4 mr-2' /> Copy Code
-              </>
+              <Copy className='h-4 w-4 mr-2' />
             )}
+            {copied ? 'Copied!' : 'Copy Code'}
           </Button>
         </div>
       </CardHeader>
       <CardContent className='p-0'>
-        <Tabs
-          defaultValue='preview'
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className='w-full'
-        >
+        <Tabs value={activeTab} onValueChange={setActiveTab} className='w-full'>
           <TabsList className='w-full border-b'>
             <TabsTrigger value='preview' className='flex items-center gap-2'>
               <Eye className='h-4 w-4' /> Preview
@@ -196,112 +158,18 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
           </TabsList>
 
           <TabsContent value='preview' className='p-4'>
-            <div className='relative mb-2 flex items-center justify-end gap-2'>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => setScale((prev) => Math.max(0.5, prev - 0.1))}
-                disabled={scale <= 0.5}
-              >
-                <Minus className='h-3 w-3' />
-              </Button>
-              <span className='text-xs text-muted-foreground'>
-                {Math.round(scale * 100)}%
-              </span>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => setScale((prev) => Math.min(1, prev + 0.1))}
-                disabled={scale >= 1}
-              >
-                <Plus className='h-3 w-3' />
-              </Button>
-              <Button variant='outline' size='sm' onClick={adjustScale}>
-                <Maximize2 className='h-3 w-3' />
-              </Button>
-            </div>
-
-            {/* Preview container with context-matching background */}
-            <div
-              ref={previewRef}
-              className='border rounded overflow-auto preview-wrapper relative'
-              style={{
-                minHeight: '150px',
-                padding: '0.5rem',
-                backgroundColor: backgroundColor,
-                color: textColor,
-                fontFamily: component.styles?._contextFontFamily || 'inherit',
-                fontSize: component.styles?._contextFontSize || 'inherit',
-              }}
-            >
-              {/* Component container with original dimensions */}
-              <div
-                className='component-preview-parent'
-                style={{
-                  display: 'flex',
-                  justifyContent: 'flex-start',
-                  alignItems: 'flex-start',
-                  width: '100%',
-                  minHeight: '100px',
-                }}
-              >
-                <div
-                  className='component-preview-container'
-                  style={{
-                    transform: `scale(${scale})`,
-                    transformOrigin: 'top left',
-                    // Prevent container from stretching component
-                    display: 'inline-block',
-                    width: typeof width === 'number' ? `${width}px` : width,
-                    height: typeof height === 'number' ? `${height}px` : height,
-                    maxWidth: '100%',
-                    position: 'relative',
-                  }}
-                >
-                  {/* Insert component HTML */}
-                  <div
-                    dangerouslySetInnerHTML={previewHtml}
-                    className='component-inner-content'
-                  />
-
-                  {/* If we have external styles from the component, add them */}
-                  {component.metadata?.externalStyles && (
-                    <style
-                      dangerouslySetInnerHTML={{
-                        __html: component.metadata.externalStyles,
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* If we have screenshot, show it for comparison */}
-            {component.screenshot && (
-              <div className='mt-4'>
-                <p className='text-xs text-muted-foreground mb-1'>
-                  Original screenshot:
-                </p>
-                <div className='border rounded overflow-hidden'>
-                  <img
-                    src={component.screenshot}
-                    alt={`Original ${component.type} screenshot`}
-                    className='max-w-full h-auto'
-                  />
-                </div>
-              </div>
-            )}
+            <iframe
+              ref={iframeRef}
+              className='w-full border rounded'
+              style={{ minHeight: '150px', border: '1px solid #ccc' }}
+            />
           </TabsContent>
 
           <TabsContent value='code' className='p-0'>
             <SyntaxHighlighter
               language='markup'
               style={tomorrow}
-              customStyle={{
-                padding: '1rem',
-                margin: 0,
-                borderRadius: '0.5rem',
-              }}
+              customStyle={{ padding: '1rem', borderRadius: '0.5rem' }}
             >
               {component.html}
             </SyntaxHighlighter>
@@ -312,119 +180,10 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
   )
 }
 
-function LoadingScreen({
-  message,
-  progress = 0,
-  details = '',
-  elapsedTime = 0,
-}: {
-  message: string
-  progress?: number
-  details?: string
-  elapsedTime?: number
-}) {
-  // Determine which phase we're in based on progress
-  const isExtractionPhase = progress < 70
-  const isPreviewPhase = progress >= 70 && progress < 100
-
-  // Calculate phase-specific progress
-  const extractionProgress = isExtractionPhase
-    ? Math.min(100, (progress / 70) * 100)
-    : 100
-
-  const previewProgress = isPreviewPhase
-    ? Math.min(100, ((progress - 70) / 30) * 100)
-    : progress === 100
-      ? 100
-      : 0
-
-  return (
-    <div className='fixed inset-0 flex items-center justify-center bg-white bg-opacity-90 dark:bg-night-900 dark:bg-opacity-90 z-50'>
-      <div className='text-center max-w-md w-full p-6 bg-white dark:bg-night-800 rounded-lg shadow-2xl'>
-        <div className='mb-6'>
-          <Loader2 className='mx-auto h-12 w-12 text-blue-600 dark:text-periwinkle-400 animate-spin' />
-        </div>
-
-        <h2 className='text-xl font-semibold mb-4 dark:text-gray-200'>
-          {message}
-        </h2>
-
-        {/* Phase Indicators */}
-        <div className='grid grid-cols-2 gap-2 mb-3'>
-          <div className='text-center'>
-            <div
-              className={`text-xs font-medium mb-1 ${isExtractionPhase ? 'text-blue-600 dark:text-periwinkle-400' : 'text-gray-400 dark:text-gray-500'}`}
-            >
-              <div className='flex items-center justify-center gap-1'>
-                {isExtractionPhase && (
-                  <span className='flex h-2 w-2 relative'>
-                    <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75'></span>
-                    <span className='relative inline-flex rounded-full h-2 w-2 bg-blue-600'></span>
-                  </span>
-                )}
-                Extraction
-              </div>
-            </div>
-            <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2 overflow-hidden'>
-              <div
-                className={`${isExtractionPhase ? 'bg-blue-600 dark:bg-periwinkle-400' : 'bg-green-500'} h-2 rounded-full transition-all duration-300`}
-                style={{ width: `${extractionProgress}%` }}
-              />
-            </div>
-          </div>
-          <div className='text-center'>
-            <div
-              className={`text-xs font-medium mb-1 ${isPreviewPhase ? 'text-blue-600 dark:text-periwinkle-400' : previewProgress === 100 ? 'text-green-500' : 'text-gray-400 dark:text-gray-500'}`}
-            >
-              <div className='flex items-center justify-center gap-1'>
-                {isPreviewPhase && (
-                  <span className='flex h-2 w-2 relative'>
-                    <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75'></span>
-                    <span className='relative inline-flex rounded-full h-2 w-2 bg-blue-600'></span>
-                  </span>
-                )}
-                Preview Generation
-              </div>
-            </div>
-            <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2 overflow-hidden'>
-              <div
-                className={`${isPreviewPhase ? 'bg-blue-600 dark:bg-periwinkle-400' : previewProgress === 100 ? 'bg-green-500' : 'bg-gray-300 dark:bg-night-500'} h-2 rounded-full transition-all duration-300`}
-                style={{ width: `${previewProgress}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Overall Progress Bar */}
-        <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2.5 mb-4 overflow-hidden'>
-          <div
-            className='bg-blue-600 dark:bg-periwinkle-400 h-2.5 rounded-full transition-all duration-300'
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        <div className='text-sm text-gray-600 dark:text-gray-400 mb-2'>
-          {progress}% Complete
-          {elapsedTime > 0 && ` (${elapsedTime}s)`}
-        </div>
-
-        {details && (
-          <p className='text-xs text-gray-500 dark:text-gray-300 italic'>
-            {details}
-          </p>
-        )}
-
-        {elapsedTime > 30 && (
-          <div className='mt-4 text-yellow-600 dark:text-yellow-400 text-xs'>
-            Extraction is taking longer than expected...
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 export default function ExtractPage() {
+  const [extractionProgress, setExtractionProgress] = useState(0)
+  const [renderProgress, setRenderProgress] = useState(0)
+  const [isRenderingPreviews, setIsRenderingPreviews] = useState(false)
   const loaderData = useLoaderData<typeof loader>()
   const navigate = useNavigate()
   const [url, setUrl] = useState('')
@@ -450,20 +209,29 @@ export default function ExtractPage() {
   const [copiedCustom, setCopiedCustom] = useState(false)
   const [savedLinks, setSavedLinks] = useState<string[]>([])
   const [showSavedLinks, setShowSavedLinks] = useState(false)
-  const [extractionMetrics, setExtractionMetrics] = useState({
-    totalElements: 0,
-    extractedElements: 0,
-    failedExtractions: 0,
-    extractionTime: 0,
-    resourceUsage: { cpu: 0, memory: 0 },
-    slowestComponents: [],
-    networkBottlenecks: [],
-  })
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const extractionStartTime = useRef<number | null>(null)
+  const [extractionMetrics, setExtractionMetrics] =
+    useState<ExtractionMetrics | null>(null)
   const [extractionData, setExtractionData] = useState<ActionData | null>(null)
   const [sessionId, setSessionId] = useState<string>(loaderData.storedSessionId)
   const fetcher = useFetcher<ActionData>()
+  const [extractionPhase, setExtractionPhase] = useState<
+    | 'idle'
+    | 'navigating'
+    | 'detecting'
+    | 'extracting'
+    | 'rendering'
+    | 'complete'
+  >('idle')
+
+  // Loading screen states
+  const [loadingProgress, setLoadingProgress] = useState({
+    navigating: 0,
+    extracting: 0,
+    rendering: 0,
+    currentStep: 'idle' as 'idle' | 'navigating' | 'extracting' | 'rendering',
+  })
 
   useEffect(() => {
     const storedData = localStorage.getItem('extractionData')
@@ -475,30 +243,22 @@ export default function ExtractPage() {
     if (storedLinks) setSavedLinks(JSON.parse(storedLinks))
   }, [])
 
-  // Function to prepare data for storage by removing large fields
   const prepareDataForStorage = useCallback((data: ActionData | null) => {
     if (!data) return null
-
-    // Create a deep clone to avoid modifying original data
     const storageData = JSON.parse(JSON.stringify(data))
-
-    // Remove large fields from components
     if (storageData.components) {
       storageData.components = storageData.components.map(
         (component: ExtractedComponent) => ({
           ...component,
-          // Keep essential fields, remove large content
-          html: '', // Remove full HTML content
-          cleanHtml: component.cleanHtml?.substring(0, 150) || '', // Keep only a preview
-          screenshot: '', // Remove screenshots
-          // Keep minimal styles
+          html: '',
+          cleanHtml: component.cleanHtml?.substring(0, 150) || '',
+          screenshot: '',
           styles: {
             backgroundColor: component.styles?.backgroundColor,
             color: component.styles?.color,
             width: component.styles?.width,
             height: component.styles?.height,
           },
-          // Keep minimal metadata
           metadata: {
             tagName: component.metadata?.tagName,
             classes: component.metadata?.classes,
@@ -506,7 +266,6 @@ export default function ExtractPage() {
             importanceScore: component.metadata?.importanceScore,
             hasBackgroundImage: component.metadata?.hasBackgroundImage,
             imageCount: component.metadata?.imageCount,
-            // Remove full image data
             images: component.metadata?.images
               ? component.metadata.images
                   .slice(0, 2)
@@ -519,34 +278,25 @@ export default function ExtractPage() {
         }),
       )
     }
-
     return storageData
   }, [])
 
-  // Safe storage function with size checking
   const safelyStoreData = useCallback(
     (key: string, data: any) => {
       try {
         const serialized = JSON.stringify(data)
-        // Check data size (rough estimate: 1 char ≈ 2 bytes in UTF-16)
         const sizeInKB = (serialized.length * 2) / 1024
-
         if (sizeInKB > 4000) {
-          // If larger than 4MB
           console.warn(
             `Data too large for localStorage (${Math.round(sizeInKB)}KB), using sessionStorage only`,
           )
-          // Store in session storage for current session only
           sessionStorage.setItem(key, serialized)
           return false
         }
-
-        // Safe to store in localStorage
         localStorage.setItem(key, serialized)
         return true
       } catch (error) {
         console.error('Storage error:', error)
-        // Try session storage as fallback
         try {
           const compressedData = prepareDataForStorage(data)
           sessionStorage.setItem(key, JSON.stringify(compressedData))
@@ -562,21 +312,12 @@ export default function ExtractPage() {
   useEffect(() => {
     if (extractionData) {
       try {
-        // Store a timestamp to track the latest extraction
         localStorage.setItem('extractionTimestamp', Date.now().toString())
-
-        // Try to store full data
         localStorage.setItem('extractionData', JSON.stringify(extractionData))
       } catch (error) {
         console.warn('Error storing full extraction data:', error)
-        // Fall back to compressed data
         const storageData = prepareDataForStorage(extractionData)
         safelyStoreData('extractionData', storageData)
-
-        // Always update the timestamp even if we had to compress the data
-        localStorage.setItem('extractionTimestamp', Date.now().toString())
-
-        // Keep full data in session storage
         try {
           sessionStorage.setItem(
             'extractionDataFull',
@@ -620,9 +361,7 @@ export default function ExtractPage() {
       .filter(([_, value]) => value)
       .map(([key, value]) => `${key}: ${value};`)
       .join(' ')
-
     if (!styleString) return originalHTML
-
     return originalHTML.replace(
       /<([a-z][a-z0-9]*)\s/i,
       `<$1 style="${styleString}" `,
@@ -631,14 +370,10 @@ export default function ExtractPage() {
 
   const filteredComponents = useMemo(() => {
     if (!extractionData?.components) return []
-
     return extractionData.components.filter((component) => {
-      // Type filter
       const matchesType =
         selectedTypes.length === 0 ||
         (component.type && selectedTypes.includes(component.type.toLowerCase()))
-
-      // Search text filter
       const matchesSearch =
         !searchFilter ||
         (component.name &&
@@ -647,7 +382,6 @@ export default function ExtractPage() {
           component.type.toLowerCase().includes(searchFilter.toLowerCase())) ||
         (component.html &&
           component.html.toLowerCase().includes(searchFilter.toLowerCase()))
-
       return matchesType && matchesSearch
     })
   }, [extractionData?.components, selectedTypes, searchFilter])
@@ -692,6 +426,8 @@ export default function ExtractPage() {
     extractionStartTime.current = Date.now()
     setIsPolling(true)
     setIsButtonLoading(false)
+    setExtractionPhase('navigating')
+    setLoadingProgress(0) // Reset to 0%
 
     const formData = new FormData()
     formData.append('url', url)
@@ -779,7 +515,7 @@ export default function ExtractPage() {
           `\n[${new Date().toISOString()}] Stopping polling, status: ${extractionData?.status}`,
       )
       setIsPolling(false)
-      setIsButtonLoading(false) // Ensure button loading is cleared when process completes
+      setIsButtonLoading(false)
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
         pollingRef.current = null
@@ -824,9 +560,61 @@ export default function ExtractPage() {
     }
   }, [isPolling])
 
+  // Update loading progress based on extraction status
+  useEffect(() => {
+    if (!extractionData) return
+
+    if (extractionData.status === 'navigating') {
+      setLoadingProgress((prev) => ({
+        ...prev,
+        currentStep: 'navigating',
+        navigating: extractionData.progress || 0,
+      }))
+    } else if (extractionData.status === 'processing') {
+      setLoadingProgress((prev) => ({
+        ...prev,
+        currentStep: 'extracting',
+        extracting: extractionData.progress || 0,
+      }))
+    } else if (
+      extractionData.status === 'completed' &&
+      extractionData.components
+    ) {
+      setLoadingProgress((prev) => ({
+        ...prev,
+        currentStep: 'rendering',
+        rendering: 0,
+      }))
+    }
+  }, [extractionData])
+
+  // Update rendering progress
+  useEffect(() => {
+    if (extractionData?.components && isRenderingPreviews) {
+      setLoadingProgress((prev) => ({
+        ...prev,
+        rendering: renderProgress,
+      }))
+    }
+  }, [extractionData?.components, isRenderingPreviews, renderProgress])
+
   useEffect(() => {
     if (fetcher.data?.components && fetcher.data.components.length > 0) {
       setExtractionData(fetcher.data)
+
+      // Add these lines to save metrics if they exist in fetcher.data
+      if (fetcher.data.metrics) {
+        setExtractionMetrics(fetcher.data.metrics)
+        // You could also store metrics in localStorage
+        try {
+          localStorage.setItem(
+            'extractionMetrics',
+            JSON.stringify(fetcher.data.metrics),
+          )
+        } catch (e) {
+          console.warn('Failed to store metrics:', e)
+        }
+      }
 
       if (typeof window !== 'undefined') {
         try {
@@ -909,31 +697,80 @@ export default function ExtractPage() {
     }
   }
 
+  useEffect(() => {
+    if (extractionData?.components) {
+      setIsRenderingPreviews(true)
+      setExtractionProgress(100)
+
+      let renderedCount = 0
+      const totalComponents = extractionData.components.length
+
+      const renderInterval = setInterval(() => {
+        renderedCount++
+        const progress = Math.min(
+          100,
+          Math.round((renderedCount / totalComponents) * 100),
+        )
+        setRenderProgress(progress)
+
+        if (progress === 100) {
+          clearInterval(renderInterval)
+          setIsRenderingPreviews(false)
+        }
+      }, 50)
+
+      return () => clearInterval(renderInterval)
+    }
+  }, [extractionData?.components])
+  useEffect(() => {
+    if (!extractionData) return
+
+    // Map terminal messages to phases
+    if (extractionData.message?.includes('Navigating to')) {
+      setExtractionPhase('navigating')
+      setLoadingProgress(20) // Initial progress
+    } else if (extractionData.message?.includes('Detected')) {
+      setExtractionPhase('detecting')
+      setLoadingProgress(40)
+    } else if (extractionData.message?.includes('Extracting')) {
+      setExtractionPhase('extracting')
+      setLoadingProgress(60)
+    } else if (extractionData.message?.includes('Extraction complete')) {
+      setExtractionPhase('complete')
+      setLoadingProgress(100)
+    }
+  }, [extractionData])
   const showLoadingScreen =
-    isPolling ||
-    isButtonLoading ||
-    extractionData?.status === 'pending' ||
-    extractionData?.status === 'processing' ||
-    (extractionData?.components && extractionData.components.length === 0)
+    extractionPhase !== 'idle' &&
+    extractionPhase !== 'complete' &&
+    (isPolling || isButtonLoading)
 
   return (
     <div className='container mx-auto p-6'>
       {showLoadingScreen && (
-        <LoadingScreen
-          message={
-            isPolling
-              ? 'Extracting components...'
-              : extractionData?.status === 'pending'
-                ? 'Preparing extraction...'
-                : extractionData?.status === 'processing'
-                  ? 'Processing components...'
-                  : 'Initializing...'
+        <ExtractionLoadingScreen
+          currentStep={
+            loadingProgress.currentStep === 'navigating'
+              ? 0
+              : loadingProgress.currentStep === 'extracting'
+                ? 1
+                : 2
           }
-          progress={extractionData?.progress || 0}
-          details={extractionData?.statusDetails}
-          elapsedTime={elapsedTime}
+          progress={
+            loadingProgress.currentStep === 'navigating'
+              ? loadingProgress.navigating
+              : loadingProgress.currentStep === 'extracting'
+                ? loadingProgress.extracting
+                : loadingProgress.rendering
+          }
+          extractionDetails={{
+            url,
+            componentTypes: selectedTypes,
+            elapsedTime,
+          }}
         />
       )}
+
       <Card className='max-w-6xl mx-auto dark:bg-night-300 dark:border-night-600'>
         <CardHeader className='dark:bg-night-400'>
           <CardTitle className='dark:text-gray-100'>
@@ -980,7 +817,7 @@ export default function ExtractPage() {
                 </div>
                 <Button
                   onClick={() => {
-                    setIsButtonLoading(true) // Show loading state immediately when button is clicked
+                    setIsButtonLoading(true)
                     clearStoredData()
                     startExtraction()
                   }}
@@ -1051,7 +888,6 @@ export default function ExtractPage() {
 
                   {showFilterMenu && (
                     <>
-                      {/* Search Filter */}
                       <div className='relative mb-3'>
                         <Input
                           type='text'
@@ -1102,7 +938,6 @@ export default function ExtractPage() {
                         )}
                       </div>
 
-                      {/* Active Filters */}
                       {selectedTypes.length > 0 && (
                         <div className='flex flex-wrap gap-2 mb-3'>
                           {selectedTypes.map((typeId) => {
@@ -1154,7 +989,6 @@ export default function ExtractPage() {
                         </div>
                       )}
 
-                      {/* Filter Categories */}
                       <div className='grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2'>
                         {COMPONENT_TYPES.map((type) => (
                           <div
@@ -1196,7 +1030,6 @@ export default function ExtractPage() {
               </div>
             </div>
 
-            {/* Enhanced Loading Indicators */}
             {(isPolling ||
               extractionData?.status === 'pending' ||
               extractionData?.status === 'processing') && (
@@ -1271,6 +1104,12 @@ export default function ExtractPage() {
                       Asset Playground
                     </Button>
                   </Link>
+                  <Link to='/metrics' className='inline-flex'>
+                    <Button variant='outline'>
+                      <BarChart className='mr-2 h-4 w-4' />
+                      Metrics Dashboard
+                    </Button>
+                  </Link>
                   <Button variant='outline' onClick={clearStoredData}>
                     Clear Results
                   </Button>
@@ -1290,6 +1129,12 @@ export default function ExtractPage() {
                     }
                     searchQuery={url}
                   />
+                  {extractionMetrics && (
+                    <MetricsPanel
+                      metrics={extractionMetrics}
+                      showDetailedMetrics={false}
+                    />
+                  )}
                   {filteredComponents.map((component, index) => (
                     <ComponentPreview
                       key={`${component.type}-${index}`}
