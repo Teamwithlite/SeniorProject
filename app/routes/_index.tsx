@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
 import { useFetcher, Link, useNavigate, useLoaderData } from '@remix-run/react'
+import ExtractionLoadingScreen from './loadingscreen'
 
 // Shadcn UI components
 import { Button } from '~/components/ui/button'
@@ -91,32 +92,10 @@ const COMPONENT_TYPES = [
   { id: 'toggles', label: 'Toggles & Switches' },
   { id: 'progress', label: 'Progress Bars' },
 ]
-
-function ComponentPreview({ component }: { component: ExtractedComponent }) {
+function ComponentPreview({ component }) {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('preview')
-  const [scale, setScale] = useState(1)
-  const previewRef = useRef<HTMLDivElement>(null)
-
-  const adjustScale = useCallback(() => {
-    if (previewRef.current && component.metadata?.dimensions) {
-      const containerWidth = previewRef.current.clientWidth
-      const contentWidth = component.metadata.dimensions.width || 300
-      if (contentWidth > containerWidth) {
-        setScale(Math.max(0.5, containerWidth / contentWidth))
-      } else {
-        setScale(1)
-      }
-    }
-  }, [component.metadata?.dimensions])
-
-  useEffect(() => {
-    if (activeTab === 'preview') {
-      adjustScale()
-      window.addEventListener('resize', adjustScale)
-      return () => window.removeEventListener('resize', adjustScale)
-    }
-  }, [activeTab, adjustScale])
+  const iframeRef = useRef(null)
 
   const copyToClipboard = async () => {
     await navigator.clipboard.writeText(component.html)
@@ -124,67 +103,50 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Extract background color from component or context styles
-  const backgroundColor =
-    component.styles?._contextBackground ||
-    component.styles?.backgroundColor ||
-    '#ffffff'
-  const textColor =
-    component.styles?._contextColor || component.styles?.color || '#000000'
-
-  // Get original dimensions
-  const width = component.metadata?.dimensions?.width || 'auto'
-  const height = component.metadata?.dimensions?.height || 'auto'
-
-  // Generate preview HTML
   const previewHtml = useMemo(() => {
-    // If component has external styles, include them with the HTML
-    const html = component.cleanHtml || component.html
+    return `
+      <html>
+      <head>
+        <style>${component.metadata?.externalStyles || ''}</style>
+      </head>
+      <body style="margin: 0; padding: 10px;">${component.cleanHtml || component.html}</body>
+      </html>
+    `
+  }, [component.cleanHtml, component.html, component.metadata?.externalStyles])
 
-    // Wrap the component in a container that preserves original styling context
-    return {
-      __html: html,
+  useEffect(() => {
+    if (iframeRef.current) {
+      const doc =
+        iframeRef.current.contentDocument ||
+        iframeRef.current.contentWindow.document
+      doc.open()
+      doc.write(previewHtml)
+      doc.close()
     }
-  }, [component.cleanHtml, component.html])
-
-  // Get component's original display mode
-  const displayMode = component.metadata?.originalStyles?.display || 'block'
+  }, [previewHtml, activeTab])
 
   return (
-    <Card className='mb-6 overflow-hidden border-2 border-periwinkle-200'>
-      <CardHeader className='bg-nyanza-100'>
+    <Card className='mb-6 overflow-hidden border-2 border-gray-200'>
+      <CardHeader className='bg-black'>
         <div className='flex items-center justify-between'>
-          <CardTitle className='text-lg flex items-center gap-2 text-white'>
+          <CardTitle className='text-lg flex items-center gap-2'>
             {component.name}
-            <Badge variant='secondary' className='text-xs'>
+            <span className='text-xs bg-gray-200 px-2 py-1 rounded'>
               {component.type || 'Component'}
-            </Badge>
+            </span>
           </CardTitle>
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={copyToClipboard}
-            className='text-white hover:text-nyanza-500'
-          >
+          <Button variant='ghost' size='sm' onClick={copyToClipboard}>
             {copied ? (
-              <>
-                <Check className='h-4 w-4 mr-2' /> Copied!
-              </>
+              <Check className='h-4 w-4 mr-2' />
             ) : (
-              <>
-                <Copy className='h-4 w-4 mr-2' /> Copy Code
-              </>
+              <Copy className='h-4 w-4 mr-2' />
             )}
+            {copied ? 'Copied!' : 'Copy Code'}
           </Button>
         </div>
       </CardHeader>
       <CardContent className='p-0'>
-        <Tabs
-          defaultValue='preview'
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className='w-full'
-        >
+        <Tabs value={activeTab} onValueChange={setActiveTab} className='w-full'>
           <TabsList className='w-full border-b'>
             <TabsTrigger value='preview' className='flex items-center gap-2'>
               <Eye className='h-4 w-4' /> Preview
@@ -195,112 +157,18 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
           </TabsList>
 
           <TabsContent value='preview' className='p-4'>
-            <div className='relative mb-2 flex items-center justify-end gap-2'>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => setScale((prev) => Math.max(0.5, prev - 0.1))}
-                disabled={scale <= 0.5}
-              >
-                <Minus className='h-3 w-3' />
-              </Button>
-              <span className='text-xs text-muted-foreground'>
-                {Math.round(scale * 100)}%
-              </span>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={() => setScale((prev) => Math.min(1, prev + 0.1))}
-                disabled={scale >= 1}
-              >
-                <Plus className='h-3 w-3' />
-              </Button>
-              <Button variant='outline' size='sm' onClick={adjustScale}>
-                <Maximize2 className='h-3 w-3' />
-              </Button>
-            </div>
-
-            {/* Preview container with context-matching background */}
-            <div
-              ref={previewRef}
-              className='border rounded overflow-auto preview-wrapper relative'
-              style={{
-                minHeight: '150px',
-                padding: '0.5rem',
-                backgroundColor: backgroundColor,
-                color: textColor,
-                fontFamily: component.styles?._contextFontFamily || 'inherit',
-                fontSize: component.styles?._contextFontSize || 'inherit',
-              }}
-            >
-              {/* Component container with original dimensions */}
-              <div
-                className='component-preview-parent'
-                style={{
-                  display: 'flex',
-                  justifyContent: 'flex-start',
-                  alignItems: 'flex-start',
-                  width: '100%',
-                  minHeight: '100px',
-                }}
-              >
-                <div
-                  className='component-preview-container'
-                  style={{
-                    transform: `scale(${scale})`,
-                    transformOrigin: 'top left',
-                    // Prevent container from stretching component
-                    display: 'inline-block',
-                    width: typeof width === 'number' ? `${width}px` : width,
-                    height: typeof height === 'number' ? `${height}px` : height,
-                    maxWidth: '100%',
-                    position: 'relative',
-                  }}
-                >
-                  {/* Insert component HTML */}
-                  <div
-                    dangerouslySetInnerHTML={previewHtml}
-                    className='component-inner-content'
-                  />
-
-                  {/* If we have external styles from the component, add them */}
-                  {component.metadata?.externalStyles && (
-                    <style
-                      dangerouslySetInnerHTML={{
-                        __html: component.metadata.externalStyles,
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* If we have screenshot, show it for comparison */}
-            {component.screenshot && (
-              <div className='mt-4'>
-                <p className='text-xs text-muted-foreground mb-1'>
-                  Original screenshot:
-                </p>
-                <div className='border rounded overflow-hidden'>
-                  <img
-                    src={component.screenshot}
-                    alt={`Original ${component.type} screenshot`}
-                    className='max-w-full h-auto'
-                  />
-                </div>
-              </div>
-            )}
+            <iframe
+              ref={iframeRef}
+              className='w-full border rounded'
+              style={{ minHeight: '150px', border: '1px solid #ccc' }}
+            />
           </TabsContent>
 
           <TabsContent value='code' className='p-0'>
             <SyntaxHighlighter
               language='markup'
               style={tomorrow}
-              customStyle={{
-                padding: '1rem',
-                margin: 0,
-                borderRadius: '0.5rem',
-              }}
+              customStyle={{ padding: '1rem', borderRadius: '0.5rem' }}
             >
               {component.html}
             </SyntaxHighlighter>
@@ -311,58 +179,10 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
   )
 }
 
-function LoadingScreen({
-  message,
-  progress = 0,
-  details = '',
-  elapsedTime = 0,
-}: {
-  message: string
-  progress?: number
-  details?: string
-  elapsedTime?: number
-}) {
-  return (
-    <div className='fixed inset-0 flex items-center justify-center bg-white bg-opacity-90 dark:bg-night-900 dark:bg-opacity-90 z-50'>
-      <div className='text-center max-w-md w-full p-6 bg-white dark:bg-night-800 rounded-lg shadow-2xl'>
-        <div className='mb-6'>
-          <Loader2 className='mx-auto h-12 w-12 text-blue-600 dark:text-periwinkle-400 animate-spin' />
-        </div>
-
-        <h2 className='text-xl font-semibold mb-4 dark:text-gray-200'>
-          {message}
-        </h2>
-
-        {/* Progress Bar */}
-        <div className='w-full bg-gray-200 dark:bg-night-600 rounded-full h-2.5 mb-4 overflow-hidden'>
-          <div
-            className='bg-blue-600 dark:bg-periwinkle-400 h-2.5 rounded-full transition-all duration-300'
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        <div className='text-sm text-gray-600 dark:text-gray-400 mb-2'>
-          {progress}% Complete
-          {elapsedTime > 0 && ` (${elapsedTime}s)`}
-        </div>
-
-        {details && (
-          <p className='text-xs text-gray-500 dark:text-gray-300 italic'>
-            {details}
-          </p>
-        )}
-
-        {elapsedTime > 30 && (
-          <div className='mt-4 text-yellow-600 dark:text-yellow-400 text-xs'>
-            Extraction is taking longer than expected...
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 export default function ExtractPage() {
+  const [extractionProgress, setExtractionProgress] = useState(0)
+  const [renderProgress, setRenderProgress] = useState(0)
+  const [isRenderingPreviews, setIsRenderingPreviews] = useState(false)
   const loaderData = useLoaderData<typeof loader>()
   const navigate = useNavigate()
   const [url, setUrl] = useState('')
@@ -388,15 +208,6 @@ export default function ExtractPage() {
   const [copiedCustom, setCopiedCustom] = useState(false)
   const [savedLinks, setSavedLinks] = useState<string[]>([])
   const [showSavedLinks, setShowSavedLinks] = useState(false)
-  const [extractionMetrics, setExtractionMetrics] = useState({
-    totalElements: 0,
-    extractedElements: 0,
-    failedExtractions: 0,
-    extractionTime: 0,
-    resourceUsage: { cpu: 0, memory: 0 },
-    slowestComponents: [],
-    networkBottlenecks: [],
-  })
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const extractionStartTime = useRef<number | null>(null)
   const [extractionData, setExtractionData] = useState<ActionData | null>(null)
@@ -846,30 +657,46 @@ export default function ExtractPage() {
       setPage(page - 1)
     }
   }
+  useEffect(() => {
+    if (extractionData?.components) {
+      // Start rendering previews once components are extracted
+      setIsRenderingPreviews(true)
+      setExtractionProgress(100)
+
+      // Simulate preview rendering progress
+      let renderedCount = 0
+      const totalComponents = extractionData.components.length
+
+      const renderInterval = setInterval(() => {
+        renderedCount++
+        const progress = Math.min(
+          100,
+          Math.round((renderedCount / totalComponents) * 100),
+        )
+        setRenderProgress(progress)
+
+        if (progress === 100) {
+          clearInterval(renderInterval)
+          setIsRenderingPreviews(false)
+        }
+      }, 50) // Adjust timing as needed
+
+      return () => clearInterval(renderInterval)
+    }
+  }, [extractionData?.components])
 
   const showLoadingScreen =
     isPolling ||
     isButtonLoading ||
     extractionData?.status === 'pending' ||
     extractionData?.status === 'processing' ||
+    isRenderingPreviews ||
     (extractionData?.components && extractionData.components.length === 0)
-
   return (
     <div className='container mx-auto p-6'>
       {showLoadingScreen && (
-        <LoadingScreen
-          message={
-            isPolling
-              ? 'Extracting components...'
-              : extractionData?.status === 'pending'
-                ? 'Preparing extraction...'
-                : extractionData?.status === 'processing'
-                  ? 'Processing components...'
-                  : 'Initializing...'
-          }
-          progress={extractionData?.progress || 0}
-          details={extractionData?.statusDetails}
-          elapsedTime={elapsedTime}
+        <ExtractionLoadingScreen
+        // You can pass additional props if needed
         />
       )}
       <Card className='max-w-6xl mx-auto dark:bg-night-300 dark:border-night-600'>
