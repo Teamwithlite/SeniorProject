@@ -1150,7 +1150,19 @@ export async function extractWebsite(
         components: results,
       })
 
-      return { components: results }
+      return {
+        components: results,
+        patternsDetected: patterns.length,
+        componentsByType: results.reduce(
+          (acc, component) => {
+            acc[component.type] = (acc[component.type] || 0) + 1
+            return acc
+          },
+          {} as Record<string, number>,
+        ),
+        status: 'completed',
+        message: `Extraction complete. Found ${results.length} components`,
+      }
     } catch (error) {
       clearTimeout(extractionTimeout)
       throw error

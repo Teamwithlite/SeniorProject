@@ -1,4 +1,3 @@
-// app/routes/_index.tsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import type { LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
@@ -10,7 +9,6 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Slider } from '~/components/ui/slider'
 import { Label } from '~/components/ui/label'
-import { SearchResultsBar } from '~/components/SearchResultsBar'
 import { Checkbox } from '~/components/ui/checkbox'
 import {
   Select,
@@ -93,6 +91,7 @@ const COMPONENT_TYPES = [
   { id: 'toggles', label: 'Toggles & Switches' },
   { id: 'progress', label: 'Progress Bars' },
 ]
+
 function ComponentPreview({ component }) {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('preview')
@@ -214,6 +213,22 @@ export default function ExtractPage() {
   const [extractionData, setExtractionData] = useState<ActionData | null>(null)
   const [sessionId, setSessionId] = useState<string>(loaderData.storedSessionId)
   const fetcher = useFetcher<ActionData>()
+  const [extractionPhase, setExtractionPhase] = useState<
+    | 'idle'
+    | 'navigating'
+    | 'detecting'
+    | 'extracting'
+    | 'rendering'
+    | 'complete'
+  >('idle')
+
+  // Loading screen states
+  const [loadingProgress, setLoadingProgress] = useState({
+    navigating: 0,
+    extracting: 0,
+    rendering: 0,
+    currentStep: 'idle' as 'idle' | 'navigating' | 'extracting' | 'rendering',
+  })
 
   useEffect(() => {
     const storedData = localStorage.getItem('extractionData')
@@ -225,30 +240,22 @@ export default function ExtractPage() {
     if (storedLinks) setSavedLinks(JSON.parse(storedLinks))
   }, [])
 
-  // Function to prepare data for storage by removing large fields
   const prepareDataForStorage = useCallback((data: ActionData | null) => {
     if (!data) return null
-
-    // Create a deep clone to avoid modifying original data
     const storageData = JSON.parse(JSON.stringify(data))
-
-    // Remove large fields from components
     if (storageData.components) {
       storageData.components = storageData.components.map(
         (component: ExtractedComponent) => ({
           ...component,
-          // Keep essential fields, remove large content
-          html: '', // Remove full HTML content
-          cleanHtml: component.cleanHtml?.substring(0, 150) || '', // Keep only a preview
-          screenshot: '', // Remove screenshots
-          // Keep minimal styles
+          html: '',
+          cleanHtml: component.cleanHtml?.substring(0, 150) || '',
+          screenshot: '',
           styles: {
             backgroundColor: component.styles?.backgroundColor,
             color: component.styles?.color,
             width: component.styles?.width,
             height: component.styles?.height,
           },
-          // Keep minimal metadata
           metadata: {
             tagName: component.metadata?.tagName,
             classes: component.metadata?.classes,
@@ -256,7 +263,6 @@ export default function ExtractPage() {
             importanceScore: component.metadata?.importanceScore,
             hasBackgroundImage: component.metadata?.hasBackgroundImage,
             imageCount: component.metadata?.imageCount,
-            // Remove full image data
             images: component.metadata?.images
               ? component.metadata.images
                   .slice(0, 2)
@@ -269,34 +275,25 @@ export default function ExtractPage() {
         }),
       )
     }
-
     return storageData
   }, [])
 
-  // Safe storage function with size checking
   const safelyStoreData = useCallback(
     (key: string, data: any) => {
       try {
         const serialized = JSON.stringify(data)
-        // Check data size (rough estimate: 1 char ≈ 2 bytes in UTF-16)
         const sizeInKB = (serialized.length * 2) / 1024
-
         if (sizeInKB > 4000) {
-          // If larger than 4MB
           console.warn(
             `Data too large for localStorage (${Math.round(sizeInKB)}KB), using sessionStorage only`,
           )
-          // Store in session storage for current session only
           sessionStorage.setItem(key, serialized)
           return false
         }
-
-        // Safe to store in localStorage
         localStorage.setItem(key, serialized)
         return true
       } catch (error) {
         console.error('Storage error:', error)
-        // Try session storage as fallback
         try {
           const compressedData = prepareDataForStorage(data)
           sessionStorage.setItem(key, JSON.stringify(compressedData))
@@ -312,21 +309,12 @@ export default function ExtractPage() {
   useEffect(() => {
     if (extractionData) {
       try {
-        // Store a timestamp to track the latest extraction
         localStorage.setItem('extractionTimestamp', Date.now().toString())
-
-        // Try to store full data
         localStorage.setItem('extractionData', JSON.stringify(extractionData))
       } catch (error) {
         console.warn('Error storing full extraction data:', error)
-        // Fall back to compressed data
         const storageData = prepareDataForStorage(extractionData)
         safelyStoreData('extractionData', storageData)
-
-        // Always update the timestamp even if we had to compress the data
-        localStorage.setItem('extractionTimestamp', Date.now().toString())
-
-        // Keep full data in session storage
         try {
           sessionStorage.setItem(
             'extractionDataFull',
@@ -370,9 +358,7 @@ export default function ExtractPage() {
       .filter(([_, value]) => value)
       .map(([key, value]) => `${key}: ${value};`)
       .join(' ')
-
     if (!styleString) return originalHTML
-
     return originalHTML.replace(
       /<([a-z][a-z0-9]*)\s/i,
       `<$1 style="${styleString}" `,
@@ -381,14 +367,10 @@ export default function ExtractPage() {
 
   const filteredComponents = useMemo(() => {
     if (!extractionData?.components) return []
-
     return extractionData.components.filter((component) => {
-      // Type filter
       const matchesType =
         selectedTypes.length === 0 ||
         (component.type && selectedTypes.includes(component.type.toLowerCase()))
-
-      // Search text filter
       const matchesSearch =
         !searchFilter ||
         (component.name &&
@@ -397,7 +379,6 @@ export default function ExtractPage() {
           component.type.toLowerCase().includes(searchFilter.toLowerCase())) ||
         (component.html &&
           component.html.toLowerCase().includes(searchFilter.toLowerCase()))
-
       return matchesType && matchesSearch
     })
   }, [extractionData?.components, selectedTypes, searchFilter])
@@ -442,6 +423,8 @@ export default function ExtractPage() {
     extractionStartTime.current = Date.now()
     setIsPolling(true)
     setIsButtonLoading(false)
+    setExtractionPhase('navigating')
+    setLoadingProgress(0) // Reset to 0%
 
     const formData = new FormData()
     formData.append('url', url)
@@ -529,7 +512,7 @@ export default function ExtractPage() {
           `\n[${new Date().toISOString()}] Stopping polling, status: ${extractionData?.status}`,
       )
       setIsPolling(false)
-      setIsButtonLoading(false) // Ensure button loading is cleared when process completes
+      setIsButtonLoading(false)
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
         pollingRef.current = null
@@ -574,61 +557,72 @@ export default function ExtractPage() {
     }
   }, [isPolling])
 
+  // Update loading progress based on extraction status
+  useEffect(() => {
+    if (!extractionData) return
+
+    if (extractionData.status === 'navigating') {
+      setLoadingProgress((prev) => ({
+        ...prev,
+        currentStep: 'navigating',
+        navigating: extractionData.progress || 0,
+      }))
+    } else if (extractionData.status === 'processing') {
+      setLoadingProgress((prev) => ({
+        ...prev,
+        currentStep: 'extracting',
+        extracting: extractionData.progress || 0,
+      }))
+    } else if (
+      extractionData.status === 'completed' &&
+      extractionData.components
+    ) {
+      setLoadingProgress((prev) => ({
+        ...prev,
+        currentStep: 'rendering',
+        rendering: 0,
+      }))
+    }
+  }, [extractionData])
+
+  // Update rendering progress
+  useEffect(() => {
+    if (extractionData?.components && isRenderingPreviews) {
+      setLoadingProgress((prev) => ({
+        ...prev,
+        rendering: renderProgress,
+      }))
+    }
+  }, [extractionData?.components, isRenderingPreviews, renderProgress])
+
   useEffect(() => {
     if (fetcher.data?.components && fetcher.data.components.length > 0) {
       setExtractionData(fetcher.data)
-
-      if (typeof window !== 'undefined') {
-        try {
-          // Try to store the full data in sessionStorage
-          sessionStorage.setItem(
-            'extractionDataFull',
-            JSON.stringify(fetcher.data),
-          )
-
-          // Set a flag to notify the playground that new data is available
-          // This will force the playground to use the latest data
-          sessionStorage.setItem('newExtractionAvailable', 'true')
-
-          // Add a unique identifier to track this specific extraction
-          const extractionId = `extraction_${Date.now()}`
-          sessionStorage.setItem('currentExtractionId', extractionId)
-        } catch (e) {
-          console.warn('Failed to store full extraction data:', e)
-        }
-
-        // Handle localStorage with care
-        try {
-          // Try full data first
-          localStorage.setItem('extractionData', JSON.stringify(fetcher.data))
-
-          // Update timestamp and extraction ID in localStorage too
-          localStorage.setItem('extractionTimestamp', Date.now().toString())
-          const extractionId =
-            sessionStorage.getItem('currentExtractionId') ||
-            `extraction_${Date.now()}`
-          localStorage.setItem('currentExtractionId', extractionId)
-        } catch (error) {
-          console.warn('Failed to store full data in localStorage:', error)
-          // Fall back to compressed data
-          const minimalData = prepareDataForStorage(fetcher.data)
-          safelyStoreData('extractionData', minimalData)
-
-          // Still update timestamp and extraction ID
-          localStorage.setItem('extractionTimestamp', Date.now().toString())
-          const extractionId =
-            sessionStorage.getItem('currentExtractionId') ||
-            `extraction_${Date.now()}`
-          localStorage.setItem('currentExtractionId', extractionId)
-        }
-
-        // Session ID is small, safe to store directly
-        const newSessionId =
-          fetcher.formData?.get('sessionId')?.toString() || ''
-        localStorage.setItem('sessionId', newSessionId)
-        sessionStorage.setItem('sessionId', newSessionId)
-        setSessionId(newSessionId)
+      try {
+        sessionStorage.setItem(
+          'extractionDataFull',
+          JSON.stringify(fetcher.data),
+        )
+        sessionStorage.setItem('newExtractionAvailable', 'true')
+        const extractionId = `extraction_${Date.now()}`
+        sessionStorage.setItem('currentExtractionId', extractionId)
+        localStorage.setItem('extractionData', JSON.stringify(fetcher.data))
+        localStorage.setItem('extractionTimestamp', Date.now().toString())
+        localStorage.setItem('currentExtractionId', extractionId)
+      } catch (error) {
+        console.warn('Failed to store full data in localStorage:', error)
+        const minimalData = prepareDataForStorage(fetcher.data)
+        safelyStoreData('extractionData', minimalData)
+        localStorage.setItem('extractionTimestamp', Date.now().toString())
+        const extractionId =
+          sessionStorage.getItem('currentExtractionId') ||
+          `extraction_${Date.now()}`
+        localStorage.setItem('currentExtractionId', extractionId)
       }
+      const newSessionId = fetcher.formData?.get('sessionId')?.toString() || ''
+      localStorage.setItem('sessionId', newSessionId)
+      sessionStorage.setItem('sessionId', newSessionId)
+      setSessionId(newSessionId)
     }
   }, [fetcher.data, fetcher.formData, prepareDataForStorage, safelyStoreData])
 
@@ -658,13 +652,12 @@ export default function ExtractPage() {
       setPage(page - 1)
     }
   }
+
   useEffect(() => {
     if (extractionData?.components) {
-      // Start rendering previews once components are extracted
       setIsRenderingPreviews(true)
       setExtractionProgress(100)
 
-      // Simulate preview rendering progress
       let renderedCount = 0
       const totalComponents = extractionData.components.length
 
@@ -680,26 +673,60 @@ export default function ExtractPage() {
           clearInterval(renderInterval)
           setIsRenderingPreviews(false)
         }
-      }, 50) // Adjust timing as needed
+      }, 50)
 
       return () => clearInterval(renderInterval)
     }
   }, [extractionData?.components])
+  useEffect(() => {
+    if (!extractionData) return
 
+    // Map terminal messages to phases
+    if (extractionData.message?.includes('Navigating to')) {
+      setExtractionPhase('navigating')
+      setLoadingProgress(20) // Initial progress
+    } else if (extractionData.message?.includes('Detected')) {
+      setExtractionPhase('detecting')
+      setLoadingProgress(40)
+    } else if (extractionData.message?.includes('Extracting')) {
+      setExtractionPhase('extracting')
+      setLoadingProgress(60)
+    } else if (extractionData.message?.includes('Extraction complete')) {
+      setExtractionPhase('complete')
+      setLoadingProgress(100)
+    }
+  }, [extractionData])
   const showLoadingScreen =
-    isPolling ||
-    isButtonLoading ||
-    extractionData?.status === 'pending' ||
-    extractionData?.status === 'processing' ||
-    isRenderingPreviews ||
-    (extractionData?.components && extractionData.components.length === 0)
+    extractionPhase !== 'idle' &&
+    extractionPhase !== 'complete' &&
+    (isPolling || isButtonLoading)
+
   return (
     <div className='container mx-auto p-6'>
       {showLoadingScreen && (
         <ExtractionLoadingScreen
-        // You can pass additional props if needed
+          currentStep={
+            loadingProgress.currentStep === 'navigating'
+              ? 0
+              : loadingProgress.currentStep === 'extracting'
+                ? 1
+                : 2
+          }
+          progress={
+            loadingProgress.currentStep === 'navigating'
+              ? loadingProgress.navigating
+              : loadingProgress.currentStep === 'extracting'
+                ? loadingProgress.extracting
+                : loadingProgress.rendering
+          }
+          extractionDetails={{
+            url,
+            componentTypes: selectedTypes,
+            elapsedTime,
+          }}
         />
       )}
+
       <Card className='max-w-6xl mx-auto dark:bg-night-300 dark:border-night-600'>
         <CardHeader className='dark:bg-night-400'>
           <CardTitle className='dark:text-gray-100'>
@@ -746,7 +773,7 @@ export default function ExtractPage() {
                 </div>
                 <Button
                   onClick={() => {
-                    setIsButtonLoading(true) // Show loading state immediately when button is clicked
+                    setIsButtonLoading(true)
                     clearStoredData()
                     startExtraction()
                   }}
@@ -817,7 +844,6 @@ export default function ExtractPage() {
 
                   {showFilterMenu && (
                     <>
-                      {/* Search Filter */}
                       <div className='relative mb-3'>
                         <Input
                           type='text'
@@ -868,7 +894,6 @@ export default function ExtractPage() {
                         )}
                       </div>
 
-                      {/* Active Filters */}
                       {selectedTypes.length > 0 && (
                         <div className='flex flex-wrap gap-2 mb-3'>
                           {selectedTypes.map((typeId) => {
@@ -920,7 +945,6 @@ export default function ExtractPage() {
                         </div>
                       )}
 
-                      {/* Filter Categories */}
                       <div className='grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2'>
                         {COMPONENT_TYPES.map((type) => (
                           <div
@@ -962,7 +986,6 @@ export default function ExtractPage() {
               </div>
             </div>
 
-            {/* Enhanced Loading Indicators */}
             {(isPolling ||
               extractionData?.status === 'pending' ||
               extractionData?.status === 'processing') && (
@@ -1047,15 +1070,6 @@ export default function ExtractPage() {
             extractionData.components.length > 0 ? (
               <div className='mt-4'>
                 <div className='space-y-4'>
-                  <SearchResultsBar
-                    totalResults={filteredComponents.length}
-                    extractionTime={
-                      extractionStartTime.current
-                        ? (Date.now() - extractionStartTime.current) / 1000
-                        : 0
-                    }
-                    searchQuery={url}
-                  />
                   {filteredComponents.map((component, index) => (
                     <ComponentPreview
                       key={`${component.type}-${index}`}
