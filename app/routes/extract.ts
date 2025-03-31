@@ -64,6 +64,7 @@ export const action: ActionFunction = async ({ request }) => {
       message: `Extraction complete. Found ${extractedData.components.length} components??? `,
       url,
       progress: 100,
+      metrics: extractedData.metrics,
     })
   } catch (error) {
     console.error('Extraction failed:', error)

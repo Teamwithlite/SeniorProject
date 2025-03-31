@@ -4,6 +4,7 @@ import type { LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
 import { useFetcher, Link, useNavigate, useLoaderData } from '@remix-run/react'
 import ExtractionLoadingScreen from './loadingscreen'
+import { MetricsPanel, type ExtractionMetrics } from '~/components/MetricsPanel';
 
 // Shadcn UI components
 import { Button } from '~/components/ui/button'
@@ -41,6 +42,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Chrome,
+  BarChart,
 } from 'lucide-react'
 
 // For code highlighting
@@ -93,10 +95,10 @@ const COMPONENT_TYPES = [
   { id: 'toggles', label: 'Toggles & Switches' },
   { id: 'progress', label: 'Progress Bars' },
 ]
-function ComponentPreview({ component }) {
+function ComponentPreview({ component }: { component: ExtractedComponent }) {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('preview')
-  const iframeRef = useRef(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
 
   const copyToClipboard = async () => {
     await navigator.clipboard.writeText(component.html)
@@ -116,15 +118,15 @@ function ComponentPreview({ component }) {
   }, [component.cleanHtml, component.html, component.metadata?.externalStyles])
 
   useEffect(() => {
-    if (iframeRef.current) {
+    if (iframeRef.current && iframeRef.current.contentWindow) {
       const doc =
         iframeRef.current.contentDocument ||
-        iframeRef.current.contentWindow.document
-      doc.open()
-      doc.write(previewHtml)
-      doc.close()
+        iframeRef.current.contentWindow.document;
+      doc.open();
+      doc.write(previewHtml);
+      doc.close();
     }
-  }, [previewHtml, activeTab])
+  }, [previewHtml, activeTab]);
 
   return (
     <Card className='mb-6 overflow-hidden border-2 border-gray-200'>
@@ -211,6 +213,7 @@ export default function ExtractPage() {
   const [showSavedLinks, setShowSavedLinks] = useState(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const extractionStartTime = useRef<number | null>(null)
+  const [extractionMetrics, setExtractionMetrics] = useState<ExtractionMetrics | null>(null)
   const [extractionData, setExtractionData] = useState<ActionData | null>(null)
   const [sessionId, setSessionId] = useState<string>(loaderData.storedSessionId)
   const fetcher = useFetcher<ActionData>()
@@ -577,6 +580,17 @@ export default function ExtractPage() {
   useEffect(() => {
     if (fetcher.data?.components && fetcher.data.components.length > 0) {
       setExtractionData(fetcher.data)
+
+        // Add these lines to save metrics if they exist in fetcher.data
+    if (fetcher.data.metrics) {
+      setExtractionMetrics(fetcher.data.metrics)
+      // You could also store metrics in localStorage
+      try {
+        localStorage.setItem('extractionMetrics', JSON.stringify(fetcher.data.metrics))
+      } catch (e) {
+        console.warn('Failed to store metrics:', e)
+      }
+    }
 
       if (typeof window !== 'undefined') {
         try {
@@ -1037,6 +1051,12 @@ export default function ExtractPage() {
                       Asset Playground
                     </Button>
                   </Link>
+                  <Link to='/metrics' className='inline-flex'>
+        <Button variant='outline'>
+          <BarChart className='mr-2 h-4 w-4' />
+          Metrics Dashboard
+        </Button>
+      </Link>
                   <Button variant='outline' onClick={clearStoredData}>
                     Clear Results
                   </Button>
@@ -1056,6 +1076,9 @@ export default function ExtractPage() {
                     }
                     searchQuery={url}
                   />
+                  {extractionMetrics && (
+        <MetricsPanel metrics={extractionMetrics} showDetailedMetrics={false} />
+      )}
                   {filteredComponents.map((component, index) => (
                     <ComponentPreview
                       key={`${component.type}-${index}`}
