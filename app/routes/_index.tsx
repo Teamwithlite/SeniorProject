@@ -10,6 +10,7 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Slider } from '~/components/ui/slider'
 import { Label } from '~/components/ui/label'
+import { SearchResultsBar } from '~/components/SearchResultsBar'
 import { Checkbox } from '~/components/ui/checkbox'
 import {
   Select,
@@ -1046,6 +1047,15 @@ export default function ExtractPage() {
             extractionData.components.length > 0 ? (
               <div className='mt-4'>
                 <div className='space-y-4'>
+                  <SearchResultsBar
+                    totalResults={filteredComponents.length}
+                    extractionTime={
+                      extractionStartTime.current
+                        ? (Date.now() - extractionStartTime.current) / 1000
+                        : 0
+                    }
+                    searchQuery={url}
+                  />
                   {filteredComponents.map((component, index) => (
                     <ComponentPreview
                       key={`${component.type}-${index}`}
