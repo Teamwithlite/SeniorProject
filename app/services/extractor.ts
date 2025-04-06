@@ -1,6 +1,6 @@
 // app/services/extractor.ts
 import puppeteer from 'puppeteer'
-import type { ExtractionMetrics } from '~/components/MetricsPanel';
+import type { ExtractionMetrics } from '~/components/MetricsPanel'
 
 /**
  * Clean HTML while preserving necessary styles and structure
@@ -17,14 +17,21 @@ const cleanHTML = (html: string | undefined): string => {
 }
 
 // Helper function for calculating metrics
-const calculateAccuracy = (originalValue: number, extractedValue: number, tolerance: number): number => {
-  const diff = Math.abs(originalValue - extractedValue);
-  if (diff <= tolerance) return 100;
-  
+const calculateAccuracy = (
+  originalValue: number,
+  extractedValue: number,
+  tolerance: number,
+): number => {
+  const diff = Math.abs(originalValue - extractedValue)
+  if (diff <= tolerance) return 100
+
   // Calculate as percentage accuracy based on tolerance
-  const accuracy = Math.max(0, 100 - (diff - tolerance) / (originalValue * 0.01));
-  return accuracy;
-};
+  const accuracy = Math.max(
+    0,
+    100 - (diff - tolerance) / (originalValue * 0.01),
+  )
+  return accuracy
+}
 
 // Import our custom types from types.ts
 import type { TagCounts, ExtractedComponent, ExtractedImageInfo } from '~/types'
@@ -42,6 +49,110 @@ interface ComponentSelector {
   }
 }
 
+// Timer implementation for performance tracking
+interface TimingData {
+  steps: {
+    name: string
+    durationMs: number
+    startTime: number
+    endTime: number
+  }[]
+  totalDurationMs: number
+  startTime: number
+  endTime: number
+  bottleneck: {
+    step: string
+    durationMs: number
+    percentageOfTotal: number
+  } | null
+}
+
+class ExtractionTimer {
+  private steps: {
+    name: string
+    durationMs: number
+    startTime: number
+    endTime: number
+  }[] = []
+  private currentStep: string | null = null
+  private stepStartTime: number = 0
+  private extractionStartTime: number = 0
+
+  constructor() {
+    this.extractionStartTime = Date.now()
+  }
+
+  startStep(stepName: string): void {
+    // If there's a current step, end it first
+    if (this.currentStep) {
+      this.endStep()
+    }
+
+    this.currentStep = stepName
+    this.stepStartTime = Date.now()
+    console.log(`Starting step: ${stepName}`)
+  }
+
+  endStep(): void {
+    if (!this.currentStep) return
+
+    const endTime = Date.now()
+    const duration = endTime - this.stepStartTime
+
+    this.steps.push({
+      name: this.currentStep,
+      durationMs: duration,
+      startTime: this.stepStartTime,
+      endTime,
+    })
+
+    console.log(`Completed step: ${this.currentStep} in ${duration}ms`)
+    this.currentStep = null
+  }
+
+  getTimingData(): TimingData {
+    // End any ongoing step
+    if (this.currentStep) {
+      this.endStep()
+    }
+
+    const endTime = Date.now()
+    const totalDuration = endTime - this.extractionStartTime
+
+    // Find the bottleneck (step with longest duration)
+    let bottleneckStep = null
+    let maxDuration = 0
+
+    for (const step of this.steps) {
+      if (step.durationMs > maxDuration) {
+        maxDuration = step.durationMs
+        bottleneckStep = step
+      }
+    }
+
+    const bottleneck = bottleneckStep
+      ? {
+          step: bottleneckStep.name,
+          durationMs: bottleneckStep.durationMs,
+          percentageOfTotal: (bottleneckStep.durationMs / totalDuration) * 100,
+        }
+      : null
+
+    return {
+      steps: this.steps,
+      totalDurationMs: totalDuration,
+      startTime: this.extractionStartTime,
+      endTime,
+      bottleneck,
+    }
+  }
+
+  reset(): void {
+    this.steps = []
+    this.currentStep = null
+    this.extractionStartTime = Date.now()
+  }
+}
 // Base selectors that work across different websites
 const COMPONENT_SELECTORS: ComponentSelector[] = [
   {
@@ -142,10 +253,13 @@ const generateComponentHash = (
 }
 
 // Enhanced cache with better expiration strategy
-const componentCache = new Map<string, { 
-  timestamp: number; 
-  components: ExtractedComponent[] 
-}>();
+const componentCache = new Map<
+  string,
+  {
+    timestamp: number
+    components: ExtractedComponent[]
+  }
+>()
 const CACHE_EXPIRY = 60 * 60 * 1000 // 1 hour
 
 /**
@@ -158,13 +272,19 @@ export async function extractWebsite(
     componentTypes?: string[]
     skipScreenshots?: boolean
   } = {},
-): Promise<{ components: ExtractedComponent[], metrics: ExtractionMetrics }> {
+): Promise<{
+  components: ExtractedComponent[]
+  metrics: ExtractionMetrics
+  timingData?: TimingData
+}> {
+  // Create timer for performance tracking
+  const timer = new ExtractionTimer()
   // Start tracking metrics
-  const startTime = Date.now();
-  let totalElementsDetected = 0;
-  let componentsExtracted = 0;
-  let failedExtractions = 0;
-  
+  const startTime = Date.now()
+  let totalElementsDetected = 0
+  let componentsExtracted = 0
+  let failedExtractions = 0
+
   // Create metrics object to collect data during extraction
   const metrics: Partial<ExtractionMetrics> = {
     url,
@@ -179,18 +299,20 @@ export async function extractWebsite(
     marginPaddingAccuracy: 0,
     colorAccuracy: 0,
     fontAccuracy: 0,
-  };
+  }
 
   if (!url.startsWith('http')) {
     throw new Error('Invalid URL format. Must start with http or https.')
   }
 
   // Check cache first
+  timer.startStep('cache_check')
   const cacheKey = `${url}-${JSON.stringify(options)}`
   const cached = componentCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY) {
     console.log('Using cached components for', url)
-    
+    timer.endStep()
+
     // Generate basic metrics for cached results
     const cachedMetrics: ExtractionMetrics = {
       extractionTimeMs: 0, // Minimal time since using cache
@@ -211,13 +333,19 @@ export async function extractWebsite(
       errors: [],
       url,
       timestamp: new Date().toISOString(),
-    };
-    
-    return { components: cached.components, metrics: cachedMetrics };
+    }
+
+    return {
+      components: cached.components,
+      metrics: cachedMetrics,
+      timingData: timer.getTimingData(),
+    }
   }
+  timer.endStep()
 
   let browser
   try {
+    timer.startStep('browser_launch')
     browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -229,7 +357,9 @@ export async function extractWebsite(
         '--window-size=1920x1080',
       ],
     })
+    timer.endStep()
 
+    timer.startStep('page_setup')
     const page = await browser.newPage()
 
     // Set extraction timeout
@@ -237,8 +367,10 @@ export async function extractWebsite(
     const extractionTimeout = setTimeout(() => {
       throw new Error('Extraction timed out after 90 seconds')
     }, TIMEOUT)
+    timer.endStep()
 
     try {
+      timer.startStep('request_interception_setup')
       // Allow CSS and images to load but block other heavy resources
       await page.setRequestInterception(true)
       page.on('request', (req) => {
@@ -262,7 +394,9 @@ export async function extractWebsite(
         height: 1080,
         deviceScaleFactor: 1,
       })
+      timer.endStep()
 
+      timer.startStep('inject_helpers')
       // Inject our custom style preservation helpers
       await page.evaluateOnNewDocument(() => {
         // Helper to get computed styles for an element
@@ -643,18 +777,24 @@ export async function extractWebsite(
           }
         }
       })
+      timer.endStep()
 
       // Go to the page
+      timer.startStep('page_navigation')
       console.log(`Navigating to ${url}...`)
       await page.goto(url, {
         waitUntil: 'networkidle2', // Wait until network is mostly idle for better style loading
         timeout: 30000,
       })
+      timer.endStep()
 
       // Wait longer for page to render fully and images to load
+      timer.startStep('page_render_wait')
       await new Promise((resolve) => setTimeout(resolve, 5000))
+      timer.endStep()
 
       // Wait for images to load before taking screenshots
+      timer.startStep('image_loading')
       await page.evaluate(() => {
         return new Promise((resolve) => {
           // Wait for all images to load or 3 seconds, whichever comes first
@@ -691,13 +831,17 @@ export async function extractWebsite(
           })
         })
       })
+      timer.endStep()
 
       // Get the page's base styles for context
+      timer.startStep('get_base_styles')
       const baseStyles = await page.evaluate(() => {
         return window.getBodyStyles()
       })
+      timer.endStep()
 
       // NEW: Detect repeated patterns on the page
+      timer.startStep('pattern_detection')
       const patterns = await page.evaluate(() => {
         return window.detectRepeatedPatterns()
       })
@@ -715,8 +859,10 @@ export async function extractWebsite(
           childCount: pattern.childCount,
         },
       }))
+      timer.endStep()
 
       // Extract components
+      timer.startStep('component_extraction')
       const results: ExtractedComponent[] = []
       const componentHashes = new Set<string>() // For deduplication
       const maxComponents = options.maxComponents || 50
@@ -732,14 +878,14 @@ export async function extractWebsite(
       selectorsList.sort((a, b) => a.priority - b.priority)
 
       // Metrics collection data
-      const layoutAccuracyResults: number[] = [];
-      const styleAccuracyResults: number[] = [];
-      const positionAccuracyResults: number[] = [];
-      const dimensionAccuracyResults: number[] = [];
-      const marginPaddingAccuracyResults: number[] = [];
-      const colorAccuracyResults: number[] = [];
-      const fontAccuracyResults: number[] = [];
-      const contentAccuracyResults: number[] = [];
+      const layoutAccuracyResults: number[] = []
+      const styleAccuracyResults: number[] = []
+      const positionAccuracyResults: number[] = []
+      const dimensionAccuracyResults: number[] = []
+      const marginPaddingAccuracyResults: number[] = []
+      const colorAccuracyResults: number[] = []
+      const fontAccuracyResults: number[] = []
+      const contentAccuracyResults: number[] = []
 
       // For each component type
       for (const selectorInfo of selectorsList) {
@@ -754,9 +900,10 @@ export async function extractWebsite(
         console.log(`Extracting ${type} using selector: ${selector}`)
 
         try {
+          timer.startStep(`extract_${type}`)
           // Update total elements metric
-          totalElementsDetected++;
-          
+          totalElementsDetected++
+
           // Use more advanced selector to avoid duplicates
           const fullSelector = excludeSelector
             ? `${selector}:not(${excludeSelector})`
@@ -768,7 +915,7 @@ export async function extractWebsite(
           )
 
           // Update total elements detected metric
-          totalElementsDetected += elementHandles.length;
+          totalElementsDetected += elementHandles.length
 
           // For patterns, limit the number of items to extract (to avoid too many duplicates)
           const isPattern =
@@ -784,14 +931,20 @@ export async function extractWebsite(
             i < maxItemsToExtract && componentCount < maxComponents;
             i++
           ) {
+            timer.startStep(`process_element_${type}_${i}`)
             const element = elementHandles[i]
 
             try {
               // Check if element is visible and has reasonable dimensions
               const rect = await element.boundingBox().catch(() => null)
               if (!rect || rect.width < 20 || rect.height < 20) {
-                failedExtractions++;
-                metrics.errors?.push({ type: 'size_error', message: 'Element too small', count: 1 });
+                failedExtractions++
+                metrics.errors?.push({
+                  type: 'size_error',
+                  message: 'Element too small',
+                  count: 1,
+                })
+                timer.endStep()
                 continue // Skip tiny elements
               }
 
@@ -805,14 +958,20 @@ export async function extractWebsite(
               }, element)
 
               if (position === 'fixed') {
-                failedExtractions++;
-                metrics.errors?.push({ type: 'position_error', message: 'Fixed position element', count: 1 });
+                failedExtractions++
+                metrics.errors?.push({
+                  type: 'position_error',
+                  message: 'Fixed position element',
+                  count: 1,
+                })
+                timer.endStep()
                 continue // Skip fixed positioned elements
               }
 
               // Take a screenshot for reference
               let screenshot = ''
               if (!options.skipScreenshots) {
+                timer.startStep(`screenshot_${type}_${i}`)
                 try {
                   const screenshotBuffer = await element.screenshot({
                     encoding: 'base64',
@@ -821,8 +980,14 @@ export async function extractWebsite(
                   screenshot = `data:image/png;base64,${screenshotBuffer}`
                 } catch (err) {
                   console.error('Screenshot failed:', err)
-                  metrics.errors?.push({ type: 'screenshot_error', message: err instanceof Error ? err.message : 'Unknown error', count: 1 });
+                  metrics.errors?.push({
+                    type: 'screenshot_error',
+                    message:
+                      err instanceof Error ? err.message : 'Unknown error',
+                    count: 1,
+                  })
                 }
+                timer.endStep()
               }
 
               // Extract HTML with comprehensive style preservation
@@ -890,9 +1055,9 @@ export async function extractWebsite(
                               )
                               if (urlMatch && urlMatch[1]) {
                                 // Store the background image URL as a data attribute
-                                (clone as HTMLElement).setAttribute(
+                                ;(clone as HTMLElement).setAttribute(
                                   'data-background-image',
-                                  urlMatch[1]
+                                  urlMatch[1],
                                 )
                               }
                             }
@@ -1047,8 +1212,13 @@ export async function extractWebsite(
 
               // Skip if no content was extracted
               if (!htmlWithStyles) {
-                failedExtractions++;
-                metrics.errors?.push({ type: 'extraction_error', message: 'No HTML content extracted', count: 1 });
+                failedExtractions++
+                metrics.errors?.push({
+                  type: 'extraction_error',
+                  message: 'No HTML content extracted',
+                  count: 1,
+                })
+                timer.endStep()
                 continue
               }
 
@@ -1192,34 +1362,37 @@ export async function extractWebsite(
               // Calculate accuracy values for metrics
               // These are simulated values - in a real implementation, you would compare
               // with expected values or perform visual comparison
-              
+
               // Position accuracy (±2px margin of error per specification)
-              const positionAccuracy = Math.random() * 5 + 95; // 95-100% for demonstration
-              positionAccuracyResults.push(positionAccuracy);
-              
+              const positionAccuracy = Math.random() * 5 + 95 // 95-100% for demonstration
+              positionAccuracyResults.push(positionAccuracy)
+
               // Dimension accuracy (Within 1% of original size per specification)
-              const dimensionAccuracy = Math.random() * 4 + 96; // 96-100% for demonstration
-              dimensionAccuracyResults.push(dimensionAccuracy);
-              
+              const dimensionAccuracy = Math.random() * 4 + 96 // 96-100% for demonstration
+              dimensionAccuracyResults.push(dimensionAccuracy)
+
               // Margin/padding accuracy (±2px tolerance per specification)
-              const marginPaddingAccuracy = Math.random() * 6 + 94; // 94-100% for demonstration
-              marginPaddingAccuracyResults.push(marginPaddingAccuracy);
-              
+              const marginPaddingAccuracy = Math.random() * 6 + 94 // 94-100% for demonstration
+              marginPaddingAccuracyResults.push(marginPaddingAccuracy)
+
               // Color accuracy (Maximum deviation of ±1 in hex value per specification)
-              const colorAccuracy = Math.random() * 3 + 97; // 97-100% for demonstration
-              colorAccuracyResults.push(colorAccuracy);
-              
+              const colorAccuracy = Math.random() * 3 + 97 // 97-100% for demonstration
+              colorAccuracyResults.push(colorAccuracy)
+
               // Font accuracy (font-size, line-height, letter-spacing tolerances per specification)
-              const fontAccuracy = Math.random() * 5 + 95; // 95-100% for demonstration
-              fontAccuracyResults.push(fontAccuracy);
-              
+              const fontAccuracy = Math.random() * 5 + 95 // 95-100% for demonstration
+              fontAccuracyResults.push(fontAccuracy)
+
               // Overall layout and style accuracy
-              layoutAccuracyResults.push((positionAccuracy + dimensionAccuracy + marginPaddingAccuracy) / 3);
-              styleAccuracyResults.push((colorAccuracy + fontAccuracy) / 2);
-              
+              layoutAccuracyResults.push(
+                (positionAccuracy + dimensionAccuracy + marginPaddingAccuracy) /
+                  3,
+              )
+              styleAccuracyResults.push((colorAccuracy + fontAccuracy) / 2)
+
               // Content accuracy (text, images, etc.)
-              const contentAccuracy = Math.random() * 5 + 95; // 95-100% for demonstration
-              contentAccuracyResults.push(contentAccuracy);
+              const contentAccuracy = Math.random() * 5 + 95 // 95-100% for demonstration
+              contentAccuracyResults.push(contentAccuracy)
 
               // Check for duplicates using enhanced hashing
               const hash = generateComponentHash(component)
@@ -1227,33 +1400,42 @@ export async function extractWebsite(
                 componentHashes.add(hash)
                 results.push(component)
                 componentCount++
-                componentsExtracted++;
+                componentsExtracted++
               }
             } catch (elementError) {
               console.error(`Error processing element: ${elementError}`)
-              failedExtractions++;
-              metrics.errors?.push({ 
-                type: 'element_processing_error', 
-                message: elementError instanceof Error ? elementError.message : 'Unknown error', 
-                count: 1 
-              });
+              failedExtractions++
+              metrics.errors?.push({
+                type: 'element_processing_error',
+                message:
+                  elementError instanceof Error
+                    ? elementError.message
+                    : 'Unknown error',
+                count: 1,
+              })
               // Continue to the next element
             }
 
             // Dispose element handle to prevent memory leaks
             await element.dispose().catch(() => {})
+            timer.endStep()
           }
         } catch (selectorError) {
           console.error(`Error with selector ${selector}: ${selectorError}`)
-          failedExtractions++;
-          metrics.errors?.push({ 
-            type: 'selector_error', 
-            message: selectorError instanceof Error ? selectorError.message : 'Unknown error', 
-            count: 1 
-          });
+          failedExtractions++
+          metrics.errors?.push({
+            type: 'selector_error',
+            message:
+              selectorError instanceof Error
+                ? selectorError.message
+                : 'Unknown error',
+            count: 1,
+          })
           // Continue to the next selector type
         }
+        timer.endStep()
       }
+      timer.endStep()
 
       // Clear the timeout since we've finished
       clearTimeout(extractionTimeout)
@@ -1269,45 +1451,56 @@ export async function extractWebsite(
       console.log(`Extraction complete. Found ${results.length} components`)
 
       // Calculate final metrics
-      const endTime = Date.now();
-      const extractionTimeMs = endTime - startTime;
-      
+      const endTime = Date.now()
+      const extractionTimeMs = endTime - startTime
+
       // Calculate average accuracy values
-      const avgPositionAccuracy = positionAccuracyResults.length 
-        ? positionAccuracyResults.reduce((sum, val) => sum + val, 0) / positionAccuracyResults.length 
-        : 0;
-      
-      const avgDimensionAccuracy = dimensionAccuracyResults.length 
-        ? dimensionAccuracyResults.reduce((sum, val) => sum + val, 0) / dimensionAccuracyResults.length 
-        : 0;
-      
-      const avgMarginPaddingAccuracy = marginPaddingAccuracyResults.length 
-        ? marginPaddingAccuracyResults.reduce((sum, val) => sum + val, 0) / marginPaddingAccuracyResults.length 
-        : 0;
-      
-      const avgColorAccuracy = colorAccuracyResults.length 
-        ? colorAccuracyResults.reduce((sum, val) => sum + val, 0) / colorAccuracyResults.length 
-        : 0;
-      
-      const avgFontAccuracy = fontAccuracyResults.length 
-        ? fontAccuracyResults.reduce((sum, val) => sum + val, 0) / fontAccuracyResults.length 
-        : 0;
-      
-      const avgLayoutAccuracy = layoutAccuracyResults.length 
-        ? layoutAccuracyResults.reduce((sum, val) => sum + val, 0) / layoutAccuracyResults.length 
-        : 0;
-      
-      const avgStyleAccuracy = styleAccuracyResults.length 
-        ? styleAccuracyResults.reduce((sum, val) => sum + val, 0) / styleAccuracyResults.length 
-        : 0;
-      
-      const avgContentAccuracy = contentAccuracyResults.length 
-        ? contentAccuracyResults.reduce((sum, val) => sum + val, 0) / contentAccuracyResults.length 
-        : 0;
-      
+      const avgPositionAccuracy = positionAccuracyResults.length
+        ? positionAccuracyResults.reduce((sum, val) => sum + val, 0) /
+          positionAccuracyResults.length
+        : 0
+
+      const avgDimensionAccuracy = dimensionAccuracyResults.length
+        ? dimensionAccuracyResults.reduce((sum, val) => sum + val, 0) /
+          dimensionAccuracyResults.length
+        : 0
+
+      const avgMarginPaddingAccuracy = marginPaddingAccuracyResults.length
+        ? marginPaddingAccuracyResults.reduce((sum, val) => sum + val, 0) /
+          marginPaddingAccuracyResults.length
+        : 0
+
+      const avgColorAccuracy = colorAccuracyResults.length
+        ? colorAccuracyResults.reduce((sum, val) => sum + val, 0) /
+          colorAccuracyResults.length
+        : 0
+
+      const avgFontAccuracy = fontAccuracyResults.length
+        ? fontAccuracyResults.reduce((sum, val) => sum + val, 0) /
+          fontAccuracyResults.length
+        : 0
+
+      const avgLayoutAccuracy = layoutAccuracyResults.length
+        ? layoutAccuracyResults.reduce((sum, val) => sum + val, 0) /
+          layoutAccuracyResults.length
+        : 0
+
+      const avgStyleAccuracy = styleAccuracyResults.length
+        ? styleAccuracyResults.reduce((sum, val) => sum + val, 0) /
+          styleAccuracyResults.length
+        : 0
+
+      const avgContentAccuracy = contentAccuracyResults.length
+        ? contentAccuracyResults.reduce((sum, val) => sum + val, 0) /
+          contentAccuracyResults.length
+        : 0
+
       // Calculate overall accuracy as weighted average of all metrics
-      const overallAccuracy = (avgLayoutAccuracy * 0.4 + avgStyleAccuracy * 0.4 + avgContentAccuracy * 0.2);
-      
+      const overallAccuracy =
+        avgLayoutAccuracy * 0.4 +
+        avgStyleAccuracy * 0.4 +
+        avgContentAccuracy * 0.2
+
       // Populate the final metrics object
       const finalMetrics: ExtractionMetrics = {
         extractionTimeMs,
@@ -1318,7 +1511,10 @@ export async function extractWebsite(
         overallAccuracy,
         totalElementsDetected,
         componentsExtracted,
-        extractionRate: totalElementsDetected > 0 ? (componentsExtracted / totalElementsDetected) * 100 : 0,
+        extractionRate:
+          totalElementsDetected > 0
+            ? (componentsExtracted / totalElementsDetected) * 100
+            : 0,
         failedExtractions,
         positionAccuracy: avgPositionAccuracy,
         dimensionAccuracy: avgDimensionAccuracy,
@@ -1328,7 +1524,7 @@ export async function extractWebsite(
         errors: metrics.errors || [],
         url,
         timestamp: new Date().toISOString(),
-      };
+      }
 
       // Store in cache
       componentCache.set(cacheKey, {
@@ -1336,14 +1532,18 @@ export async function extractWebsite(
         components: results,
       })
 
-      return { components: results, metrics: finalMetrics };
+      return {
+        components: results,
+        metrics: finalMetrics,
+        timingData: timer.getTimingData(),
+      }
     } catch (error) {
       clearTimeout(extractionTimeout)
       throw error
     }
   } catch (error) {
     console.error('Extraction error:', error)
-    
+
     // Generate error metrics
     const errorMetrics: ExtractionMetrics = {
       extractionTimeMs: Date.now() - startTime,
@@ -1354,7 +1554,10 @@ export async function extractWebsite(
       overallAccuracy: 0,
       totalElementsDetected,
       componentsExtracted,
-      extractionRate: totalElementsDetected > 0 ? (componentsExtracted / totalElementsDetected) * 100 : 0,
+      extractionRate:
+        totalElementsDetected > 0
+          ? (componentsExtracted / totalElementsDetected) * 100
+          : 0,
       failedExtractions,
       positionAccuracy: 0,
       dimensionAccuracy: 0,
@@ -1362,16 +1565,16 @@ export async function extractWebsite(
       colorAccuracy: 0,
       fontAccuracy: 0,
       errors: [
-        { 
-          type: 'fatal_error', 
-          message: error instanceof Error ? error.message : 'Unknown error', 
-          count: 1 
-        }
+        {
+          type: 'fatal_error',
+          message: error instanceof Error ? error.message : 'Unknown error',
+          count: 1,
+        },
       ],
       url,
       timestamp: new Date().toISOString(),
-    };
-    
+    }
+
     throw new Error(
       `Failed to extract UI components: ${
         error instanceof Error ? error.message : 'Unknown error'
