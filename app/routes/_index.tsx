@@ -104,6 +104,13 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const openInTestingPage = (componentHtml: string) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('codeTestContent', componentHtml);
+      navigate('/code-test');
+    }
+  }
+
   const previewHtml = useMemo(() => {
     return `
       <html>
@@ -144,6 +151,10 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
             )}
             {copied ? 'Copied!' : 'Copy Code'}
           </Button>
+          <Button onClick={() => openInTestingPage(component.html)} variant="outline" size="sm">
+  <Eye className="mr-2 h-4 w-4" />
+  Test in Playground
+</Button>
         </div>
       </CardHeader>
       <CardContent className='p-0'>
@@ -1110,6 +1121,12 @@ export default function ExtractPage() {
                       Metrics Dashboard
                     </Button>
                   </Link>
+                  <Link to="/code-test" className="inline-flex">
+  <Button variant="outline">
+    <Code className="mr-2 h-4 w-4" />
+    Test Component Code
+  </Button>
+</Link>
                   <Button variant='outline' onClick={clearStoredData}>
                     Clear Results
                   </Button>
@@ -1139,6 +1156,7 @@ export default function ExtractPage() {
                     <ComponentPreview
                       key={`${component.type}-${index}`}
                       component={component}
+                      onTestClick={() => openInTestingPage(component.html)}
                     />
                   ))}
                 </div>

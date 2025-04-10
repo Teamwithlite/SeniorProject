@@ -6,10 +6,14 @@ import {
   Scripts,
   ScrollRestoration,
   useLocation,
+  useRouteError,
+  isRouteErrorResponse,
+  Link,
 } from '@remix-run/react'
 import type { LinksFunction } from '@remix-run/node'
 import { useState, useEffect } from 'react'
 import { Sun, Moon } from 'lucide-react'
+import { Button } from '~/components/ui/button'
 
 import styles from './tailwind.css?url'
 
@@ -90,3 +94,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return <Outlet />
 }
+
+// app/root.tsx or your error boundary component
+export function ErrorBoundary() {
+  const error = useRouteError();
+  
+  return (
+    <div className="container mx-auto p-6">
+      <div className="bg-red-50 border border-red-200 p-4 rounded-md">
+        <h1 className="text-lg font-bold text-red-800">Error</h1>
+        <p className="text-red-700">
+          {isRouteErrorResponse(error)
+            ? `${error.status} ${error.statusText}`
+            : error instanceof Error
+            ? error.message
+            : "Unknown error"}
+        </p>
+        <div className="mt-4">
+          <Link to="/">
+            <Button variant="outline" size="sm">
+              Return to Home
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+

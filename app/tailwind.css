@@ -73,6 +73,20 @@
   }
 }
 
+/* Add these to your global CSS to support Twitch-like UI components */
+:root {
+  --font-weight-semibold: 600;
+  --button-text-default: 13px;
+  --button-size-default: 30px;
+  --input-border-radius-default: 4px;
+  --color-background-button-text-default: #3a3a3d;
+  --color-text-button-text: #efeff1;
+  --border-radius-medium: 4px;
+  --color-fill-button-icon: #efeff1;
+}
+
+/* Add more CSS variable sets for other component types */
+
 /* Custom colors for your design */
 @layer base {
   :root {
