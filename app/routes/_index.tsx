@@ -3,8 +3,8 @@ import type { LoaderFunction } from '@remix-run/node'
 import { json } from '@remix-run/node'
 import { useFetcher, Link, useNavigate, useLoaderData } from '@remix-run/react'
 import { SearchResultsBar } from '@/components/SearchResultsBar'
-import ExtractionLoadingScreen from './loadingscreen'
 import { MetricsPanel, type ExtractionMetrics } from '~/components/MetricsPanel'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 // Shadcn UI components
 import { Button } from '~/components/ui/button'
@@ -93,6 +93,7 @@ const COMPONENT_TYPES = [
   { id: 'toggles', label: 'Toggles & Switches' },
   { id: 'progress', label: 'Progress Bars' },
 ]
+
 function ComponentPreview({ component }: { component: ExtractedComponent }) {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('preview')
@@ -224,14 +225,29 @@ export default function ExtractPage() {
     | 'rendering'
     | 'complete'
   >('idle')
-
-  // Loading screen states
   const [loadingProgress, setLoadingProgress] = useState({
     navigating: 0,
     extracting: 0,
     rendering: 0,
     currentStep: 'idle' as 'idle' | 'navigating' | 'extracting' | 'rendering',
   })
+
+  const getLoadingMessage = (phase: string) => {
+    switch (phase) {
+      case 'navigating':
+        return 'Loading website...'
+      case 'detecting':
+        return 'Analyzing page structure...'
+      case 'extracting':
+        return 'Extracting components...'
+      case 'rendering':
+        return 'Preparing results...'
+      case 'complete':
+        return 'Extraction completed!'
+      default:
+        return 'Processing...'
+    }
+  }
 
   useEffect(() => {
     const storedData = localStorage.getItem('extractionData')
@@ -425,9 +441,14 @@ export default function ExtractPage() {
     setManualDebug('')
     extractionStartTime.current = Date.now()
     setIsPolling(true)
-    setIsButtonLoading(false)
-    setExtractionPhase('navigating')
-    setLoadingProgress(0) // Reset to 0%
+    setIsButtonLoading(true)
+    setExtractionPhase('navigating') // Start with navigating phase
+    setLoadingProgress({
+      navigating: 0,
+      extracting: 0,
+      rendering: 0,
+      currentStep: 'navigating',
+    })
 
     const formData = new FormData()
     formData.append('url', url)
@@ -565,26 +586,38 @@ export default function ExtractPage() {
     if (!extractionData) return
 
     if (extractionData.status === 'navigating') {
+      setExtractionPhase('navigating')
       setLoadingProgress((prev) => ({
         ...prev,
         currentStep: 'navigating',
         navigating: extractionData.progress || 0,
       }))
-    } else if (extractionData.status === 'processing') {
+    } else if (extractionData.message?.includes('Detected')) {
+      setExtractionPhase('detecting')
       setLoadingProgress((prev) => ({
         ...prev,
         currentStep: 'extracting',
-        extracting: extractionData.progress || 0,
+        extracting: 40,
       }))
-    } else if (
-      extractionData.status === 'completed' &&
-      extractionData.components
-    ) {
+    } else if (extractionData.status === 'processing') {
+      setExtractionPhase('extracting')
+      setLoadingProgress((prev) => ({
+        ...prev,
+        currentStep: 'extracting',
+        extracting: extractionData.progress || 60,
+      }))
+    } else if (extractionData.status === 'completed') {
+      setExtractionPhase('complete')
       setLoadingProgress((prev) => ({
         ...prev,
         currentStep: 'rendering',
-        rendering: 0,
+        rendering: 100,
       }))
+      // Hide spinner after a brief delay to show completion
+      setTimeout(() => {
+        setExtractionPhase('idle')
+        setIsButtonLoading(false)
+      }, 1000)
     }
   }, [extractionData])
 
@@ -602,10 +635,8 @@ export default function ExtractPage() {
     if (fetcher.data?.components && fetcher.data.components.length > 0) {
       setExtractionData(fetcher.data)
 
-      // Add these lines to save metrics if they exist in fetcher.data
       if (fetcher.data.metrics) {
         setExtractionMetrics(fetcher.data.metrics)
-        // You could also store metrics in localStorage
         try {
           localStorage.setItem(
             'extractionMetrics',
@@ -618,29 +649,19 @@ export default function ExtractPage() {
 
       if (typeof window !== 'undefined') {
         try {
-          // Try to store the full data in sessionStorage
           sessionStorage.setItem(
             'extractionDataFull',
             JSON.stringify(fetcher.data),
           )
-
-          // Set a flag to notify the playground that new data is available
-          // This will force the playground to use the latest data
           sessionStorage.setItem('newExtractionAvailable', 'true')
-
-          // Add a unique identifier to track this specific extraction
           const extractionId = `extraction_${Date.now()}`
           sessionStorage.setItem('currentExtractionId', extractionId)
         } catch (e) {
           console.warn('Failed to store full extraction data:', e)
         }
 
-        // Handle localStorage with care
         try {
-          // Try full data first
           localStorage.setItem('extractionData', JSON.stringify(fetcher.data))
-
-          // Update timestamp and extraction ID in localStorage too
           localStorage.setItem('extractionTimestamp', Date.now().toString())
           const extractionId =
             sessionStorage.getItem('currentExtractionId') ||
@@ -648,11 +669,8 @@ export default function ExtractPage() {
           localStorage.setItem('currentExtractionId', extractionId)
         } catch (error) {
           console.warn('Failed to store full data in localStorage:', error)
-          // Fall back to compressed data
           const minimalData = prepareDataForStorage(fetcher.data)
           safelyStoreData('extractionData', minimalData)
-
-          // Still update timestamp and extraction ID
           localStorage.setItem('extractionTimestamp', Date.now().toString())
           const extractionId =
             sessionStorage.getItem('currentExtractionId') ||
@@ -660,7 +678,6 @@ export default function ExtractPage() {
           localStorage.setItem('currentExtractionId', extractionId)
         }
 
-        // Session ID is small, safe to store directly
         const newSessionId =
           fetcher.formData?.get('sessionId')?.toString() || ''
         localStorage.setItem('sessionId', newSessionId)
@@ -722,24 +739,7 @@ export default function ExtractPage() {
       return () => clearInterval(renderInterval)
     }
   }, [extractionData?.components])
-  useEffect(() => {
-    if (!extractionData) return
 
-    // Map terminal messages to phases
-    if (extractionData.message?.includes('Navigating to')) {
-      setExtractionPhase('navigating')
-      setLoadingProgress(20) // Initial progress
-    } else if (extractionData.message?.includes('Detected')) {
-      setExtractionPhase('detecting')
-      setLoadingProgress(40)
-    } else if (extractionData.message?.includes('Extracting')) {
-      setExtractionPhase('extracting')
-      setLoadingProgress(60)
-    } else if (extractionData.message?.includes('Extraction complete')) {
-      setExtractionPhase('complete')
-      setLoadingProgress(100)
-    }
-  }, [extractionData])
   const showLoadingScreen =
     extractionPhase !== 'idle' &&
     extractionPhase !== 'complete' &&
@@ -748,27 +748,22 @@ export default function ExtractPage() {
   return (
     <div className='container mx-auto p-6'>
       {showLoadingScreen && (
-        <ExtractionLoadingScreen
-          currentStep={
-            loadingProgress.currentStep === 'navigating'
-              ? 0
-              : loadingProgress.currentStep === 'extracting'
-                ? 1
-                : 2
-          }
-          progress={
-            loadingProgress.currentStep === 'navigating'
-              ? loadingProgress.navigating
-              : loadingProgress.currentStep === 'extracting'
-                ? loadingProgress.extracting
-                : loadingProgress.rendering
-          }
-          extractionDetails={{
-            url,
-            componentTypes: selectedTypes,
-            elapsedTime,
-          }}
-        />
+        <div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center'>
+          <LoadingSpinner
+            size='large'
+            color='#3b82f6'
+            message={getLoadingMessage(extractionPhase)}
+            progress={
+              extractionPhase === 'navigating'
+                ? loadingProgress.navigating
+                : extractionPhase === 'detecting'
+                  ? loadingProgress.extracting
+                  : extractionPhase === 'extracting'
+                    ? loadingProgress.extracting
+                    : loadingProgress.rendering
+            }
+          />
+        </div>
       )}
 
       <Card className='max-w-6xl mx-auto dark:bg-night-300 dark:border-night-600'>
