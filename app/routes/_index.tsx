@@ -106,8 +106,8 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
 
   const openInTestingPage = (componentHtml: string) => {
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('codeTestContent', componentHtml);
-      navigate('/code-test');
+      sessionStorage.setItem('codeTestContent', componentHtml)
+      navigate('/code-test')
     }
   }
 
@@ -151,10 +151,14 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
             )}
             {copied ? 'Copied!' : 'Copy Code'}
           </Button>
-          <Button onClick={() => openInTestingPage(component.html)} variant="outline" size="sm">
-  <Eye className="mr-2 h-4 w-4" />
-  Test in Playground
-</Button>
+          <Button
+            onClick={() => openInTestingPage(component.html)}
+            variant='outline'
+            size='sm'
+          >
+            <Eye className='mr-2 h-4 w-4' />
+            Test in Playground
+          </Button>
         </div>
       </CardHeader>
       <CardContent className='p-0'>
@@ -443,6 +447,7 @@ export default function ExtractPage() {
     const formData = new FormData()
     formData.append('url', url)
     formData.append('action', 'start')
+    formData.append('skipScreenshots', 'true') // Add this line
 
     if (selectedTypes.length > 0) {
       selectedTypes.forEach((type) => {
@@ -1121,12 +1126,12 @@ export default function ExtractPage() {
                       Metrics Dashboard
                     </Button>
                   </Link>
-                  <Link to="/code-test" className="inline-flex">
-  <Button variant="outline">
-    <Code className="mr-2 h-4 w-4" />
-    Test Component Code
-  </Button>
-</Link>
+                  <Link to='/code-test' className='inline-flex'>
+                    <Button variant='outline'>
+                      <Code className='mr-2 h-4 w-4' />
+                      Test Component Code
+                    </Button>
+                  </Link>
                   <Button variant='outline' onClick={clearStoredData}>
                     Clear Results
                   </Button>

@@ -1072,51 +1072,6 @@ export async function extractWebsite(
       })
       timer.endStep()
 
-      // Wait longer for page to render fully and images to load
-      timer.startStep('page_render_wait')
-      await new Promise((resolve) => setTimeout(resolve, 5000))
-      timer.endStep()
-
-      // Wait for images to load before taking screenshots
-      timer.startStep('image_loading')
-      await page.evaluate(() => {
-        return new Promise((resolve) => {
-          // Wait for all images to load or 3 seconds, whichever comes first
-          const images = document.querySelectorAll('img')
-          let loaded = 0
-
-          if (images.length === 0) return resolve(void 0)
-
-          const imageTimeout = setTimeout(() => resolve(void 0), 3000)
-
-          images.forEach((img) => {
-            if (img.complete) {
-              loaded++
-              if (loaded === images.length) {
-                clearTimeout(imageTimeout)
-                resolve(void 0)
-              }
-            } else {
-              img.addEventListener('load', () => {
-                loaded++
-                if (loaded === images.length) {
-                  clearTimeout(imageTimeout)
-                  resolve(void 0)
-                }
-              })
-              img.addEventListener('error', () => {
-                loaded++
-                if (loaded === images.length) {
-                  clearTimeout(imageTimeout)
-                  resolve(void 0)
-                }
-              })
-            }
-          })
-        })
-      })
-      timer.endStep()
-
       // Get the page's base styles for context
       timer.startStep('get_base_styles')
       const baseStyles = await page.evaluate(() => {
