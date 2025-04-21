@@ -93,10 +93,12 @@ const COMPONENT_TYPES = [
   { id: 'toggles', label: 'Toggles & Switches' },
   { id: 'progress', label: 'Progress Bars' },
 ]
+
 function ComponentPreview({ component }: { component: ExtractedComponent }) {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('preview')
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const navigate = useNavigate()
 
   const copyToClipboard = async () => {
     await navigator.clipboard.writeText(component.html)
@@ -241,123 +243,27 @@ export default function ExtractPage() {
   })
 
   useEffect(() => {
-    const storedData = localStorage.getItem('extractionData')
-    const storedSessionId = localStorage.getItem('sessionId')
-    const storedLinks = localStorage.getItem('savedLinks')
+    const storedData = sessionStorage.getItem('extractionData')
+    const storedSessionId = sessionStorage.getItem('sessionId')
+    const storedLinks = sessionStorage.getItem('savedLinks')
 
     if (storedData) setExtractionData(JSON.parse(storedData))
     if (storedSessionId) setSessionId(storedSessionId)
     if (storedLinks) setSavedLinks(JSON.parse(storedLinks))
   }, [])
 
-  const prepareDataForStorage = useCallback((data: ActionData | null) => {
-    if (!data) return null
-    const storageData = JSON.parse(JSON.stringify(data))
-    if (storageData.components) {
-      storageData.components = storageData.components.map(
-        (component: ExtractedComponent) => ({
-          ...component,
-          html: '',
-          cleanHtml: component.cleanHtml?.substring(0, 150) || '',
-          screenshot: '',
-          styles: {
-            backgroundColor: component.styles?.backgroundColor,
-            color: component.styles?.color,
-            width: component.styles?.width,
-            height: component.styles?.height,
-          },
-          metadata: {
-            tagName: component.metadata?.tagName,
-            classes: component.metadata?.classes,
-            dimensions: component.metadata?.dimensions,
-            importanceScore: component.metadata?.importanceScore,
-            hasBackgroundImage: component.metadata?.hasBackgroundImage,
-            imageCount: component.metadata?.imageCount,
-            images: component.metadata?.images
-              ? component.metadata.images
-                  .slice(0, 2)
-                  .map((img: ExtractedImageInfo) => ({
-                    src: img.src.substring(0, 100),
-                    type: img.type,
-                  }))
-              : [],
-          },
-        }),
-      )
-    }
-    return storageData
-  }, [])
-
-  const safelyStoreData = useCallback(
-    (key: string, data: any) => {
-      try {
-        const serialized = JSON.stringify(data)
-        const sizeInKB = (serialized.length * 2) / 1024
-        if (sizeInKB > 4000) {
-          console.warn(
-            `Data too large for localStorage (${Math.round(sizeInKB)}KB), using sessionStorage only`,
-          )
-          sessionStorage.setItem(key, serialized)
-          return false
-        }
-        localStorage.setItem(key, serialized)
-        return true
-      } catch (error) {
-        console.error('Storage error:', error)
-        try {
-          const compressedData = prepareDataForStorage(data)
-          sessionStorage.setItem(key, JSON.stringify(compressedData))
-        } catch (sessionError) {
-          console.error('Session storage also failed:', sessionError)
-        }
-        return false
-      }
-    },
-    [prepareDataForStorage],
-  )
-
-  useEffect(() => {
-    if (extractionData) {
-      try {
-        localStorage.setItem('extractionTimestamp', Date.now().toString())
-        localStorage.setItem('extractionData', JSON.stringify(extractionData))
-      } catch (error) {
-        console.warn('Error storing full extraction data:', error)
-        const storageData = prepareDataForStorage(extractionData)
-        safelyStoreData('extractionData', storageData)
-        try {
-          sessionStorage.setItem(
-            'extractionDataFull',
-            JSON.stringify(extractionData),
-          )
-        } catch (e) {
-          console.warn(
-            'Could not store full extraction data in session storage:',
-            e,
-          )
-        }
-      }
-    }
-  }, [extractionData, prepareDataForStorage, safelyStoreData])
-
-  useEffect(() => {
-    if (sessionId) {
-      localStorage.setItem('sessionId', sessionId)
-    }
-  }, [sessionId])
+  const clearStoredData = () => {
+    setExtractionData(null)
+    setSessionId('')
+    sessionStorage.removeItem('extractionData')
+    sessionStorage.removeItem('sessionId')
+  }
 
   const saveLink = (link: string) => {
     if (!link) return
     const updatedLinks = Array.from(new Set([link, ...savedLinks])).slice(0, 5)
     setSavedLinks(updatedLinks)
-    localStorage.setItem('savedLinks', JSON.stringify(updatedLinks))
-  }
-
-  const clearStoredData = () => {
-    setExtractionData(null)
-    setSessionId('')
-    localStorage.removeItem('extractionData')
-    localStorage.removeItem('sessionId')
+    sessionStorage.setItem('savedLinks', JSON.stringify(updatedLinks))
   }
 
   const generateCustomizedHTML = (
@@ -434,12 +340,12 @@ export default function ExtractPage() {
     setIsPolling(true)
     setIsButtonLoading(false)
     setExtractionPhase('navigating')
-    setLoadingProgress(0) // Reset to 0%
+    setLoadingProgress({ ...loadingProgress, navigating: 0 })
 
     const formData = new FormData()
     formData.append('url', url)
     formData.append('action', 'start')
-    formData.append('skipScreenshots', 'true') // Add this line
+    formData.append('skipScreenshots', 'true')
 
     if (selectedTypes.length > 0) {
       selectedTypes.forEach((type) => {
@@ -610,73 +516,30 @@ export default function ExtractPage() {
     if (fetcher.data?.components && fetcher.data.components.length > 0) {
       setExtractionData(fetcher.data)
 
-      // Add these lines to save metrics if they exist in fetcher.data
       if (fetcher.data.metrics) {
         setExtractionMetrics(fetcher.data.metrics)
-        // You could also store metrics in localStorage
-        try {
-          localStorage.setItem(
-            'extractionMetrics',
-            JSON.stringify(fetcher.data.metrics),
-          )
-        } catch (e) {
-          console.warn('Failed to store metrics:', e)
-        }
       }
 
       if (typeof window !== 'undefined') {
         try {
-          // Try to store the full data in sessionStorage
           sessionStorage.setItem(
             'extractionDataFull',
             JSON.stringify(fetcher.data),
           )
-
-          // Set a flag to notify the playground that new data is available
-          // This will force the playground to use the latest data
           sessionStorage.setItem('newExtractionAvailable', 'true')
-
-          // Add a unique identifier to track this specific extraction
           const extractionId = `extraction_${Date.now()}`
           sessionStorage.setItem('currentExtractionId', extractionId)
         } catch (e) {
           console.warn('Failed to store full extraction data:', e)
         }
 
-        // Handle localStorage with care
-        try {
-          // Try full data first
-          localStorage.setItem('extractionData', JSON.stringify(fetcher.data))
-
-          // Update timestamp and extraction ID in localStorage too
-          localStorage.setItem('extractionTimestamp', Date.now().toString())
-          const extractionId =
-            sessionStorage.getItem('currentExtractionId') ||
-            `extraction_${Date.now()}`
-          localStorage.setItem('currentExtractionId', extractionId)
-        } catch (error) {
-          console.warn('Failed to store full data in localStorage:', error)
-          // Fall back to compressed data
-          const minimalData = prepareDataForStorage(fetcher.data)
-          safelyStoreData('extractionData', minimalData)
-
-          // Still update timestamp and extraction ID
-          localStorage.setItem('extractionTimestamp', Date.now().toString())
-          const extractionId =
-            sessionStorage.getItem('currentExtractionId') ||
-            `extraction_${Date.now()}`
-          localStorage.setItem('currentExtractionId', extractionId)
-        }
-
-        // Session ID is small, safe to store directly
         const newSessionId =
           fetcher.formData?.get('sessionId')?.toString() || ''
-        localStorage.setItem('sessionId', newSessionId)
         sessionStorage.setItem('sessionId', newSessionId)
         setSessionId(newSessionId)
       }
     }
-  }, [fetcher.data, fetcher.formData, prepareDataForStorage, safelyStoreData])
+  }, [fetcher.data, fetcher.formData])
 
   useEffect(() => {
     return () => {
@@ -730,24 +593,22 @@ export default function ExtractPage() {
       return () => clearInterval(renderInterval)
     }
   }, [extractionData?.components])
+
   useEffect(() => {
     if (!extractionData) return
 
     // Map terminal messages to phases
     if (extractionData.message?.includes('Navigating to')) {
       setExtractionPhase('navigating')
-      setLoadingProgress(20) // Initial progress
     } else if (extractionData.message?.includes('Detected')) {
       setExtractionPhase('detecting')
-      setLoadingProgress(40)
     } else if (extractionData.message?.includes('Extracting')) {
       setExtractionPhase('extracting')
-      setLoadingProgress(60)
     } else if (extractionData.message?.includes('Extraction complete')) {
       setExtractionPhase('complete')
-      setLoadingProgress(100)
     }
   }, [extractionData])
+
   const showLoadingScreen =
     extractionPhase !== 'idle' &&
     extractionPhase !== 'complete' &&
@@ -1141,7 +1002,6 @@ export default function ExtractPage() {
                     <ComponentPreview
                       key={`${component.type}-${index}`}
                       component={component}
-                      onTestClick={() => openInTestingPage(component.html)}
                     />
                   ))}
                 </div>
