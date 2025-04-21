@@ -4,7 +4,7 @@ import { Link } from '@remix-run/react';
 import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
-import { ChevronLeft, Download, Trash2 } from 'lucide-react';
+import { ChevronLeft, Download, Trash2, Code } from 'lucide-react';
 import { MetricsPanel, type ExtractionMetrics } from '~/components/MetricsPanel';
 import { Alert, AlertDescription } from '~/components/ui/alert';
 
@@ -142,6 +142,14 @@ export default function MetricsPage() {
           )}
         </CardContent>
       </Card>
+      <div className="flex justify-end space-x-2 mt-6">
+  <Link to="/metrics-debug">
+    <Button variant="outline" size="sm">
+      <Code className="mr-2 h-4 w-4" />
+      View Detailed Calculations
+    </Button>
+  </Link>
+</div>
     </div>
   );
 }
