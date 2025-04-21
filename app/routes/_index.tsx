@@ -151,14 +151,6 @@ function ComponentPreview({ component }: { component: ExtractedComponent }) {
             )}
             {copied ? 'Copied!' : 'Copy Code'}
           </Button>
-          <Button
-            onClick={() => openInTestingPage(component.html)}
-            variant='outline'
-            size='sm'
-          >
-            <Eye className='mr-2 h-4 w-4' />
-            Test in Playground
-          </Button>
         </div>
       </CardHeader>
       <CardContent className='p-0'>
@@ -1108,12 +1100,6 @@ export default function ExtractPage() {
             {extractionData?.components &&
               extractionData.components.length > 0 && (
                 <div className='flex justify-end space-x-2 mt-6'>
-                  <Link to='/debug' className='inline-flex'>
-                    <Button variant='outline'>
-                      <Code className='mr-2 h-4 w-4' />
-                      Debug View
-                    </Button>
-                  </Link>
                   <Link to='/playground' className='inline-flex'>
                     <Button>
                       <Code className='mr-2 h-4 w-4' />
@@ -1124,12 +1110,6 @@ export default function ExtractPage() {
                     <Button variant='outline'>
                       <BarChart className='mr-2 h-4 w-4' />
                       Metrics Dashboard
-                    </Button>
-                  </Link>
-                  <Link to='/code-test' className='inline-flex'>
-                    <Button variant='outline'>
-                      <Code className='mr-2 h-4 w-4' />
-                      Test Component Code
                     </Button>
                   </Link>
                   <Button variant='outline' onClick={clearStoredData}>

@@ -84,14 +84,24 @@ export default function MetricsPage() {
         <CardContent>
           {currentMetrics ? (
             <>
-              <div className="flex justify-end gap-2 mb-4">
-                <Button variant="outline" size="sm" onClick={saveMetricsToHistory}>
-                  Save to History
-                </Button>
-                <Button variant="outline" size="sm" onClick={exportMetricsAsJson}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export JSON
-                </Button>
+              <div className="flex justify-between items-center gap-2 mb-4">
+                <div>
+                  <Link to="/metrics-debug">
+                    <Button variant="secondary" size="sm">
+                      <Code className="mr-2 h-4 w-4" />
+                      View Detailed Calculations
+                    </Button>
+                  </Link>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={saveMetricsToHistory}>
+                    Save to History
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={exportMetricsAsJson}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export JSON
+                  </Button>
+                </div>
               </div>
               
               <MetricsPanel metrics={currentMetrics} showDetailedMetrics={true} />
@@ -142,14 +152,6 @@ export default function MetricsPage() {
           )}
         </CardContent>
       </Card>
-      <div className="flex justify-end space-x-2 mt-6">
-  <Link to="/metrics-debug">
-    <Button variant="outline" size="sm">
-      <Code className="mr-2 h-4 w-4" />
-      View Detailed Calculations
-    </Button>
-  </Link>
-</div>
     </div>
   );
 }

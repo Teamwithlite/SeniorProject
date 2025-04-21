@@ -13,7 +13,7 @@ import { Input } from '~/components/ui/input'
 import { Slider } from '~/components/ui/slider'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
-import { Copy, Check, ArrowLeft, RefreshCw } from 'lucide-react'
+import { Code, Copy, Check, ArrowLeft, RefreshCw } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { tomorrow } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 
@@ -481,33 +481,39 @@ export default function PlaygroundPage() {
   return (
     <div className='container mx-auto p-6'>
       <Card className='max-w-6xl mx-auto'>
-        <CardHeader className='flex flex-row items-center justify-between'>
-          <CardTitle>Asset Playground</CardTitle>
-          <div className='flex gap-2'>
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={handleRefreshData}
-              title='Refresh to load latest extraction data'
-            >
-              <RefreshCw className='mr-2 h-4 w-4' />
-              Refresh Data
-            </Button>
-            <Button
-              variant='destructive'
-              size='sm'
-              onClick={handleResetStorage}
-            >
-              Reset Data
-            </Button>
-            <Link to='/'>
-              <Button variant='outline' size='sm'>
-                <ArrowLeft className='mr-2 h-4 w-4' />
-                Back to Extract
-              </Button>
-            </Link>
-          </div>
-        </CardHeader>
+      <CardHeader className='flex flex-row items-center justify-between'>
+  <CardTitle>Asset Playground</CardTitle>
+  <div className='flex gap-2'>
+    <Button
+      variant='outline'
+      size='sm'
+      onClick={handleRefreshData}
+      title='Refresh to load latest extraction data'
+    >
+      <RefreshCw className='mr-2 h-4 w-4' />
+      Refresh Data
+    </Button>
+    <Link to='/code-test'>
+      <Button variant='secondary' size='sm'>
+        <Code className='mr-2 h-4 w-4' />
+        Advanced Playground
+      </Button>
+    </Link>
+    <Button
+      variant='destructive'
+      size='sm'
+      onClick={handleResetStorage}
+    >
+      Reset Data
+    </Button>
+    <Link to='/'>
+      <Button variant='outline' size='sm'>
+        <ArrowLeft className='mr-2 h-4 w-4' />
+        Back to Extract
+      </Button>
+    </Link>
+  </div>
+</CardHeader>
         <CardContent>
           {extractionData?.components?.length ? (
             <div className='grid grid-cols-1 gap-8'>

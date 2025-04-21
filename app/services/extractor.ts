@@ -35,52 +35,39 @@ const calculateAccuracy = (
 
 // Add these helper functions at the top of your file, after the existing calculateAccuracy function
 
-// Helper functions for metrics calculation
 const calculatePositionAccuracy = (
   original: { x: number; y: number },
-  extracted: { x: number; y: number },
+  extracted: { x: number; y: number }
 ): number => {
-  // Position accuracy: ±2px margin of error
-  const xDeviation = Math.abs(original.x - extracted.x)
-  const yDeviation = Math.abs(original.y - extracted.y)
-
-  // If within tolerance, accuracy is 100%
-  if (xDeviation <= 2 && yDeviation <= 2) return 100
-
-  // Otherwise calculate percentage based on deviation
-  // Higher deviation = lower accuracy
-  const maxAllowedDeviation = 20 // Beyond this, accuracy becomes very low
-  const xAccuracy =
-    100 - Math.min(((xDeviation - 2) / maxAllowedDeviation) * 100, 100)
-  const yAccuracy =
-    100 - Math.min(((yDeviation - 2) / maxAllowedDeviation) * 100, 100)
-
-  // Average of x and y accuracy
-  return (xAccuracy + yAccuracy) / 2
-}
+  // Calculate absolute deviations
+  const xDeviation = Math.abs(original.x - extracted.x);
+  const yDeviation = Math.abs(original.y - extracted.y);
+  
+  // Calculate relative accuracy for each dimension
+  // Using a linear scale where deviation of 0px = 100% and maxDeviation = 0%
+  const maxDeviation = 10; // Maximum meaningful deviation in pixels
+  const xAccuracy = Math.max(0, 100 * (1 - xDeviation / maxDeviation));
+  const yAccuracy = Math.max(0, 100 * (1 - yDeviation / maxDeviation));
+  
+  // Return the average of x and y accuracy
+  return (xAccuracy + yAccuracy) / 2;
+};
 
 const calculateDimensionAccuracy = (
   original: { width: number; height: number },
-  extracted: { width: number; height: number },
+  extracted: { width: number; height: number }
 ): number => {
-  // Element dimensions: Within 1% of the original size
-  const widthDeviation =
-    Math.abs(original.width - extracted.width) / original.width
-  const heightDeviation =
-    Math.abs(original.height - extracted.height) / original.height
-
-  // If within tolerance (1%), accuracy is 100%
-  if (widthDeviation <= 0.01 && heightDeviation <= 0.01) return 100
-
-  // Otherwise calculate percentage based on deviation
-  const widthAccuracy = 100 - Math.min((widthDeviation - 0.01) * 100 * 10, 100)
-  const heightAccuracy =
-    100 - Math.min((heightDeviation - 0.01) * 100 * 10, 100)
-
-  // Average of width and height accuracy
-  return (widthAccuracy + heightAccuracy) / 2
-}
-
+  // Calculate relative deviations as percentage of original dimensions
+  const widthDeviation = Math.abs(original.width - extracted.width) / original.width;
+  const heightDeviation = Math.abs(original.height - extracted.height) / original.height;
+  
+  // Calculate accuracy (0% deviation = 100% accuracy, 10% deviation = 0% accuracy)
+  const maxDeviation = 0.1; // 10% deviation is considered maximal error
+  const widthAccuracy = Math.max(0, 100 * (1 - widthDeviation / maxDeviation));
+  const heightAccuracy = Math.max(0, 100 * (1 - heightDeviation / maxDeviation));
+  
+  return (widthAccuracy + heightAccuracy) / 2;
+};
 const calculateSpacingAccuracy = (
   original: { margin: string; padding: string },
   extracted: { margin: string; padding: string },
@@ -297,17 +284,27 @@ const calculateAlignmentAccuracy = (
 // Calculate overall layout accuracy from individual metrics
 const calculateOverallLayoutAccuracy = (
   positionAccuracy: number,
-  dimensionAccuracy: number,
-  marginPaddingAccuracy: number,
-  alignmentAccuracy: number,
+  dimensionAccuracy: number, 
+  spacingAccuracy: number,
+  alignmentAccuracy: number | null = null
 ): number => {
+  // If alignment accuracy is available and valid
+  if (alignmentAccuracy !== null && !isNaN(alignmentAccuracy)) {
+    return (
+      positionAccuracy * 0.35 +
+      dimensionAccuracy * 0.35 +
+      spacingAccuracy * 0.30 +
+      alignmentAccuracy * 0.30
+    ) / (0.35 + 0.35 + 0.30 + 0.30); // Normalize to ensure it sums to 100%
+  }
+  
+  // If alignment data is not available, redistribute weights
   return (
-    positionAccuracy * 0.3 +
-    dimensionAccuracy * 0.3 +
-    marginPaddingAccuracy * 0.2 +
-    alignmentAccuracy * 0.2
-  )
-}
+    positionAccuracy * 0.35 +
+    dimensionAccuracy * 0.35 +
+    spacingAccuracy * 0.30
+  );
+};
 
 // Calculate overall style accuracy from individual metrics
 const calculateOverallStyleAccuracy = (
@@ -1125,6 +1122,7 @@ export async function extractWebsite(
       const colorAccuracyResults: number[] = []
       const fontAccuracyResults: number[] = []
       const contentAccuracyResults: number[] = []
+      const alignmentAccuracyResults: number[] = []
 
       // For each component type
       for (const selectorInfo of selectorsList) {
@@ -1708,13 +1706,25 @@ export async function extractWebsite(
                   )
                 : 95
 
-              const alignmentAccuracy = originalMetrics
-                ? calculateAlignmentAccuracy(
-                    originalMetrics.alignment,
-                    extractedMetrics.alignment,
-                  )
-                : 90
+                const display = originalMetrics.alignment.display
+  const isFlexOrGrid =
+    display === 'flex' ||
+    display === 'inline-flex' ||
+    display === 'grid' ||
+    display === 'inline-grid'
 
+  // only compute & record alignmentAccuracy for true flex/grid elements
+  const alignmentAccuracy = isFlexOrGrid
+    ? calculateAlignmentAccuracy(
+        originalMetrics.alignment,
+        extractedMetrics.alignment,
+      )
+    : NaN
+
+  if (!isNaN(alignmentAccuracy)) {
+    alignmentAccuracyResults.push(alignmentAccuracy)
+  }
+                
               // Calculate composite metrics
               const layoutAccuracy = calculateOverallLayoutAccuracy(
                 positionAccuracy,
@@ -1841,7 +1851,12 @@ export async function extractWebsite(
         ? contentAccuracyResults.reduce((sum, val) => sum + val, 0) /
           contentAccuracyResults.length
         : 0
-
+      
+        const avgAlignmentAccuracy = alignmentAccuracyResults.length > 0
+        ? alignmentAccuracyResults.reduce((a, b) => a + b, 0)
+          / alignmentAccuracyResults.length
+        : null
+    
       // Calculate overall accuracy as weighted average of all metrics
       const overallAccuracy =
         avgLayoutAccuracy * 0.4 +
@@ -1849,29 +1864,31 @@ export async function extractWebsite(
         avgContentAccuracy * 0.2
 
       // Populate the final metrics object
-      const finalMetrics: ExtractionMetrics = {
-        extractionTimeMs,
-        responseTimeMs: extractionTimeMs, // Same for now
-        layoutAccuracy: avgLayoutAccuracy,
-        styleAccuracy: avgStyleAccuracy,
-        contentAccuracy: avgContentAccuracy,
-        overallAccuracy,
-        totalElementsDetected,
-        componentsExtracted,
-        extractionRate:
-          totalElementsDetected > 0
-            ? (componentsExtracted / totalElementsDetected) * 100
-            : 0,
-        failedExtractions,
-        positionAccuracy: avgPositionAccuracy,
-        dimensionAccuracy: avgDimensionAccuracy,
-        marginPaddingAccuracy: avgMarginPaddingAccuracy,
-        colorAccuracy: avgColorAccuracy,
-        fontAccuracy: avgFontAccuracy,
-        errors: metrics.errors || [],
-        url,
-        timestamp: new Date().toISOString(),
-      }
+// Populate the final metrics object
+const finalMetrics: ExtractionMetrics = {
+  extractionTimeMs,
+  responseTimeMs: extractionTimeMs, // Same for now
+  layoutAccuracy: avgLayoutAccuracy,
+  styleAccuracy: avgStyleAccuracy,
+  contentAccuracy: avgContentAccuracy,
+  overallAccuracy,
+  totalElementsDetected,
+  componentsExtracted,
+  extractionRate:
+    totalElementsDetected > 0
+      ? (componentsExtracted / totalElementsDetected) * 100
+      : 0,
+  failedExtractions,
+  positionAccuracy: avgPositionAccuracy,
+  dimensionAccuracy: avgDimensionAccuracy,
+  marginPaddingAccuracy: avgMarginPaddingAccuracy,
+  alignmentAccuracy: avgAlignmentAccuracy,
+  colorAccuracy: avgColorAccuracy,
+  fontAccuracy: avgFontAccuracy,
+  errors: metrics.errors || [],
+  url,
+  timestamp: new Date().toISOString(),
+};
 
       // Store in cache
       componentCache.set(cacheKey, {

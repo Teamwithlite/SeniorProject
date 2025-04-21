@@ -27,7 +27,7 @@ export interface ExtractionMetrics {
   positionAccuracy: number;
   dimensionAccuracy: number;
   marginPaddingAccuracy: number;
-  alignmentAccuracy: number; // Added alignment accuracy
+  alignmentAccuracy: number | null;
   colorAccuracy: number;
   fontAccuracy: number;
   
@@ -52,18 +52,21 @@ const formatTime = (ms: number): string => {
 export const MetricsPanel = ({ metrics, showDetailedMetrics = false }: MetricsPanelProps) => {
   const isResponseTimeWithinSpec = metrics.responseTimeMs < 5000;
   
-  // Calculate adjusted layout accuracy if alignment accuracy is missing
-  const hasAlignmentAccuracy = metrics.alignmentAccuracy !== undefined && !isNaN(metrics.alignmentAccuracy);
-  
-  // Calculate adjusted layout accuracy without alignment if it's missing
-  const adjustedLayoutAccuracy = hasAlignmentAccuracy 
-    ? metrics.layoutAccuracy 
-    : (metrics.positionAccuracy * 0.375 + metrics.dimensionAccuracy * 0.375 + metrics.marginPaddingAccuracy * 0.25);
-  
-  // Calculate adjusted overall accuracy if alignment accuracy is missing
-  const adjustedOverallAccuracy = hasAlignmentAccuracy 
-    ? metrics.overallAccuracy
-    : (adjustedLayoutAccuracy * 0.4 + metrics.styleAccuracy * 0.4 + metrics.contentAccuracy * 0.2);
+// Calculate adjusted layout accuracy if alignment accuracy is missing
+const hasAlignmentAccuracy = 
+  metrics.alignmentAccuracy !== undefined && 
+  metrics.alignmentAccuracy !== null && 
+  !isNaN(metrics.alignmentAccuracy);
+
+// Calculate adjusted layout accuracy without alignment if it's missing
+const adjustedLayoutAccuracy = hasAlignmentAccuracy 
+  ? metrics.layoutAccuracy 
+  : (metrics.positionAccuracy * 0.35 + metrics.dimensionAccuracy * 0.35 + metrics.marginPaddingAccuracy * 0.30);
+
+// Calculate adjusted overall accuracy if alignment accuracy is missing
+const adjustedOverallAccuracy = hasAlignmentAccuracy 
+  ? metrics.overallAccuracy
+  : (adjustedLayoutAccuracy * 0.4 + metrics.styleAccuracy * 0.4 + metrics.contentAccuracy * 0.2);
   
   return (
     <Card className="mb-6 overflow-hidden border-2">
@@ -99,18 +102,6 @@ export const MetricsPanel = ({ metrics, showDetailedMetrics = false }: MetricsPa
                 <Badge variant={isResponseTimeWithinSpec ? "success" : "destructive"} className="mt-2">
                   {isResponseTimeWithinSpec ? "Within spec" : "Exceeds spec"}
                 </Badge>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  <Target size={16} /> Extraction Rate
-                </div>
-                <div className="text-xl font-semibold">
-                  {metrics.extractionRate.toFixed(1)}%
-                </div>
-                <div className="mt-2 text-sm">
-                  {metrics.componentsExtracted} of {metrics.totalElementsDetected} elements
-                </div>
               </div>
               
               <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border">
@@ -171,7 +162,6 @@ export const MetricsPanel = ({ metrics, showDetailedMetrics = false }: MetricsPa
                   <div className="text-xs text-gray-500 mt-1">Target: ±2px</div>
                 </div>
                 
-                {/* Alignment Accuracy - Show only if available
                 <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border">
                   <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
                     Alignment Accuracy
@@ -181,16 +171,6 @@ export const MetricsPanel = ({ metrics, showDetailedMetrics = false }: MetricsPa
                   </div>
                   <Progress value={hasAlignmentAccuracy ? metrics.alignmentAccuracy : 0} className="h-2 mt-2" />
                   <div className="text-xs text-gray-500 mt-1">Flex/Grid layout</div>
-                </div> */}
-                
-                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border">
-                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    Overall Layout
-                  </div>
-                  <div className="text-xl font-semibold">
-                    {adjustedLayoutAccuracy.toFixed(1)}%
-                  </div>
-                  <Progress value={adjustedLayoutAccuracy} className="h-2 mt-2" />
                 </div>
               </div>
             </div>
@@ -219,16 +199,6 @@ export const MetricsPanel = ({ metrics, showDetailedMetrics = false }: MetricsPa
                   </div>
                   <Progress value={metrics.fontAccuracy} className="h-2 mt-2" />
                   <div className="text-xs text-gray-500 mt-1">Font size, line height, spacing</div>
-                </div>
-                
-                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border">
-                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    Overall Style
-                  </div>
-                  <div className="text-xl font-semibold">
-                    {metrics.styleAccuracy.toFixed(1)}%
-                  </div>
-                  <Progress value={metrics.styleAccuracy} className="h-2 mt-2" />
                 </div>
               </div>
             </div>
