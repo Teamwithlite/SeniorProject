@@ -117,12 +117,15 @@ export default function MetricsDebugPage() {
       const avgDimensionAccuracy = calculatedComponents.reduce((sum, comp) => sum + comp.dimensionData.accuracy, 0) / calculatedComponents.length;
       const avgSpacingAccuracy = calculatedComponents.reduce((sum, comp) => sum + comp.spacingData.accuracy, 0) / calculatedComponents.length;
       
-      // Only include alignment if it exists
-      const componentsWithAlignment = calculatedComponents.filter(comp => comp.hasAlignment);
-      const avgAlignmentAccuracy = componentsWithAlignment.length > 0 
-        ? componentsWithAlignment.reduce((sum, comp) => sum + comp.alignmentData.accuracy, 0) / componentsWithAlignment.length
-        : null;
-      
+// Make sure we're only working with valid alignment data
+const componentsWithValidAlignment = calculatedComponents.filter(
+  comp => comp.alignmentData?.accuracy !== null && comp.alignmentData?.accuracy !== undefined
+);
+
+// Calculate average only if we have valid components
+const avgAlignmentAccuracy = componentsWithValidAlignment.length > 0
+  ? componentsWithValidAlignment.reduce((sum, comp) => sum + comp.alignmentData.accuracy, 0) / componentsWithValidAlignment.length
+  : null;
       const avgColorAccuracy = calculatedComponents.reduce((sum, comp) => sum + comp.colorData.accuracy, 0) / calculatedComponents.length;
       const avgTypographyAccuracy = calculatedComponents.reduce((sum, comp) => sum + comp.typographyData.accuracy, 0) / calculatedComponents.length;
       
@@ -245,58 +248,76 @@ export default function MetricsDebugPage() {
               <Separator />
               
               <div>
-                <h2 className="text-lg font-semibold mb-3">Component-Level Metrics</h2>
-                <div className="overflow-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-800">
-                      <tr>
-                        <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Component</th>
-                        <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Position</th>
-                        <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dimension</th>
-                        <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Spacing</th>
-                        <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Alignment</th>
-                        <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Layout</th>
-                        <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Color</th>
-                        <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Typography</th>
-                        <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Style</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-900 dark:divide-gray-700">
-                      {calculationSteps?.components?.map((component: any, idx: number) => (
-                        <tr key={idx} className={idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-800' : 'bg-white dark:bg-gray-900'}>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-200">
-                            {component.type} {idx + 1}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {component.positionData.accuracy.toFixed(1)}%
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {component.dimensionData.accuracy.toFixed(1)}%
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {component.spacingData.accuracy.toFixed(1)}%
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {component.alignmentData.accuracy !== null ? component.alignmentData.accuracy.toFixed(1) + '%' : 'N/A'}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
-                            {component.layoutAccuracy.toFixed(1)}%
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {component.colorData.accuracy.toFixed(1)}%
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            {component.typographyData.accuracy.toFixed(1)}%
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-green-600 dark:text-green-400">
-                            {component.styleAccuracy.toFixed(1)}%
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+  <h2 className="text-lg font-semibold mb-3">Component-Level Metrics</h2>
+  <div className="overflow-auto">
+    {calculationSteps?.components && calculationSteps.components.length > 0 ? (
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead className="bg-gray-50 dark:bg-gray-800">
+          <tr>
+            <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Component</th>
+            <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Position</th>
+            <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dimension</th>
+            <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Spacing</th>
+            <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Alignment</th>
+            <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Layout</th>
+            <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Color</th>
+            <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Typography</th>
+            <th scope="col" className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Style</th>
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-900 dark:divide-gray-700">
+          {calculationSteps.components.map((component, idx) => (
+            <tr key={idx} className={idx % 2 === 0 ? 'bg-gray-50 dark:bg-gray-800' : 'bg-white dark:bg-gray-900'}>
+              <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-200">
+                {component.type} {idx + 1}
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                {component.positionData?.accuracy?.toFixed(1)}%
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                {component.dimensionData?.accuracy?.toFixed(1)}%
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                {component.spacingData?.accuracy?.toFixed(1)}%
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                {component.alignmentData?.accuracy !== null && component.alignmentData?.accuracy !== undefined 
+                  ? component.alignmentData.accuracy.toFixed(1) + '%' 
+                  : 'N/A'}
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
+                {component.layoutAccuracy?.toFixed(1)}%
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                {component.colorData?.accuracy?.toFixed(1)}%
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                {component.typographyData?.accuracy?.toFixed(1)}%
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-green-600 dark:text-green-400">
+                {component.styleAccuracy?.toFixed(1)}%
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    ) : (
+      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md text-center">
+        <p className="text-gray-500 dark:text-gray-400">
+          No component-level data available. Simulation might not have generated components.
+        </p>
+        <Button 
+          onClick={simulateCalculationSteps} 
+          variant="outline" 
+          size="sm" 
+          className="mt-2"
+        >
+          Regenerate Simulation
+        </Button>
+      </div>
+    )}
+  </div>
+</div>
               
               <Separator />
               
@@ -319,13 +340,26 @@ export default function MetricsDebugPage() {
                         <span className="font-mono">{calculationSteps?.averages?.spacingAccuracy?.toFixed(1) || metrics.marginPaddingAccuracy?.toFixed(1)}%</span>
                       </li>
                       <li className="flex justify-between">
-                        <span>Alignment Accuracy:</span>
-                        <span className="font-mono">
-                          {calculationSteps?.averages?.alignmentAccuracy !== null 
-                            ? `${calculationSteps.averages.alignmentAccuracy.toFixed(1)}%` 
-                            : 'N/A'}
-                        </span>
-                      </li>
+  <span>Alignment Accuracy:</span>
+  <span className="font-mono">
+    {(() => {
+      // Count components with valid alignment values
+      const componentsWithAlignment = calculationSteps?.components?.filter(
+        comp => comp.alignmentData?.accuracy !== null && comp.alignmentData?.accuracy !== undefined
+      ) || [];
+      
+      // Calculate average only from valid components
+      const avgValue = componentsWithAlignment.length > 0
+        ? componentsWithAlignment.reduce((sum, comp) => sum + comp.alignmentData.accuracy, 0) / componentsWithAlignment.length
+        : null;
+      
+      // Display the value or N/A
+      return avgValue !== null && avgValue !== undefined
+        ? `${avgValue.toFixed(1)}%`
+        : 'N/A';
+    })()}
+  </span>
+</li>
                       <Separator className="my-2" />
                       <li className="flex justify-between font-medium">
                         <span>Overall Layout:</span>
