@@ -257,8 +257,8 @@ export default function ExtractPage() {
     setSessionId('')
     sessionStorage.removeItem('extractionData')
     sessionStorage.removeItem('sessionId')
-    localStorage.removeItem('extractionMetrics');
-    localStorage.removeItem('extractionRawData');
+    localStorage.removeItem('extractionMetrics')
+    localStorage.removeItem('extractionRawData')
   }
 
   const saveLink = (link: string) => {
@@ -513,24 +513,30 @@ export default function ExtractPage() {
       }))
     }
   }, [extractionData?.components, isRenderingPreviews, renderProgress])
-  
+
   useEffect(() => {
     if (fetcher.data?.components && fetcher.data.components.length > 0) {
       setExtractionData(fetcher.data)
 
       if (fetcher.data.metrics) {
         setExtractionMetrics(fetcher.data.metrics)
-        
+
         // ADD THIS BLOCK - Store metrics in localStorage for the metrics dashboard
         try {
-          localStorage.setItem('extractionMetrics', JSON.stringify(fetcher.data.metrics));
+          localStorage.setItem(
+            'extractionMetrics',
+            JSON.stringify(fetcher.data.metrics),
+          )
           // Also store some raw data for the debug view
-          localStorage.setItem('extractionRawData', JSON.stringify({
-            url: fetcher.data.url,
-            componentsFound: fetcher.data.componentsFound,
-            componentsProcessed: fetcher.data.componentsProcessed,
-            timestamp: new Date().toISOString()
-          }));
+          localStorage.setItem(
+            'extractionRawData',
+            JSON.stringify({
+              url: fetcher.data.url,
+              componentsFound: fetcher.data.componentsFound,
+              componentsProcessed: fetcher.data.componentsProcessed,
+              timestamp: new Date().toISOString(),
+            }),
+          )
         } catch (e) {
           console.warn('Failed to store metrics in localStorage:', e)
         }
@@ -632,7 +638,7 @@ export default function ExtractPage() {
     (isPolling || isButtonLoading)
 
   return (
-    <div className='container mx-auto p-6'>
+    <div className='container mx-auto p-6='>
       {showLoadingScreen && (
         <ExtractionLoadingScreen
           currentStep={

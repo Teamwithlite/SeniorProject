@@ -68,6 +68,7 @@ const config = {
           800: '#588963',
           900: '#62996e',
         },
+
         background: '#121826',
         foreground: '#d9d9d9',
         primary: {

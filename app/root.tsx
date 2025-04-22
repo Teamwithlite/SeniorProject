@@ -81,7 +81,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
       </head>
-      <body>
+      <body className='bg-white dark:bg-gray-900'>
         {showThemeToggle && <ThemeToggle />}
         {children}
         <ScrollRestoration />
@@ -97,29 +97,27 @@ export default function App() {
 
 // app/root.tsx or your error boundary component
 export function ErrorBoundary() {
-  const error = useRouteError();
-  
+  const error = useRouteError()
+
   return (
-    <div className="container mx-auto p-6">
-      <div className="bg-red-50 border border-red-200 p-4 rounded-md">
-        <h1 className="text-lg font-bold text-red-800">Error</h1>
-        <p className="text-red-700">
+    <div className='container mx-auto p-6'>
+      <div className='bg-red-50 border border-red-200 p-4 rounded-md'>
+        <h1 className='text-lg font-bold text-red-800'>Error</h1>
+        <p className='text-red-700'>
           {isRouteErrorResponse(error)
             ? `${error.status} ${error.statusText}`
             : error instanceof Error
-            ? error.message
-            : "Unknown error"}
+              ? error.message
+              : 'Unknown error'}
         </p>
-        <div className="mt-4">
-          <Link to="/">
-            <Button variant="outline" size="sm">
+        <div className='mt-4'>
+          <Link to='/'>
+            <Button variant='outline' size='sm'>
               Return to Home
             </Button>
           </Link>
         </div>
       </div>
     </div>
-  );
+  )
 }
-
-
