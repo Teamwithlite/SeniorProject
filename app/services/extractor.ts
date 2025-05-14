@@ -1,7 +1,7 @@
 // app/services/extractor.ts
 import puppeteer from 'puppeteer'
 import type { ExtractionMetrics } from '~/components/MetricsPanel'
-
+import chromium from '@sparticuz/chromium'
 /**
  * Clean HTML while preserving necessary styles and structure
  */
@@ -34,40 +34,46 @@ const calculateAccuracy = (
 }
 
 // Add these helper functions at the top of your file, after the existing calculateAccuracy function
-
+const IS_LOCAL = process.env.NODE_ENV === 'development'
+const CHROMIUM_PATH = IS_LOCAL
+  ? process.env.CHROMIUM_EXECUTABLE_PATH ||
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe' // Windows default
+  : chromium.executablePath()
 const calculatePositionAccuracy = (
   original: { x: number; y: number },
-  extracted: { x: number; y: number }
+  extracted: { x: number; y: number },
 ): number => {
   // Calculate absolute deviations
-  const xDeviation = Math.abs(original.x - extracted.x);
-  const yDeviation = Math.abs(original.y - extracted.y);
-  
+  const xDeviation = Math.abs(original.x - extracted.x)
+  const yDeviation = Math.abs(original.y - extracted.y)
+
   // Calculate relative accuracy for each dimension
   // Using a linear scale where deviation of 0px = 100% and maxDeviation = 0%
-  const maxDeviation = 10; // Maximum meaningful deviation in pixels
-  const xAccuracy = Math.max(0, 100 * (1 - xDeviation / maxDeviation));
-  const yAccuracy = Math.max(0, 100 * (1 - yDeviation / maxDeviation));
-  
+  const maxDeviation = 10 // Maximum meaningful deviation in pixels
+  const xAccuracy = Math.max(0, 100 * (1 - xDeviation / maxDeviation))
+  const yAccuracy = Math.max(0, 100 * (1 - yDeviation / maxDeviation))
+
   // Return the average of x and y accuracy
-  return (xAccuracy + yAccuracy) / 2;
-};
+  return (xAccuracy + yAccuracy) / 2
+}
 
 const calculateDimensionAccuracy = (
   original: { width: number; height: number },
-  extracted: { width: number; height: number }
+  extracted: { width: number; height: number },
 ): number => {
   // Calculate relative deviations as percentage of original dimensions
-  const widthDeviation = Math.abs(original.width - extracted.width) / original.width;
-  const heightDeviation = Math.abs(original.height - extracted.height) / original.height;
-  
+  const widthDeviation =
+    Math.abs(original.width - extracted.width) / original.width
+  const heightDeviation =
+    Math.abs(original.height - extracted.height) / original.height
+
   // Calculate accuracy (0% deviation = 100% accuracy, 10% deviation = 0% accuracy)
-  const maxDeviation = 0.1; // 10% deviation is considered maximal error
-  const widthAccuracy = Math.max(0, 100 * (1 - widthDeviation / maxDeviation));
-  const heightAccuracy = Math.max(0, 100 * (1 - heightDeviation / maxDeviation));
-  
-  return (widthAccuracy + heightAccuracy) / 2;
-};
+  const maxDeviation = 0.1 // 10% deviation is considered maximal error
+  const widthAccuracy = Math.max(0, 100 * (1 - widthDeviation / maxDeviation))
+  const heightAccuracy = Math.max(0, 100 * (1 - heightDeviation / maxDeviation))
+
+  return (widthAccuracy + heightAccuracy) / 2
+}
 const calculateSpacingAccuracy = (
   original: { margin: string; padding: string },
   extracted: { margin: string; padding: string },
@@ -284,27 +290,26 @@ const calculateAlignmentAccuracy = (
 // Calculate overall layout accuracy from individual metrics
 const calculateOverallLayoutAccuracy = (
   positionAccuracy: number,
-  dimensionAccuracy: number, 
+  dimensionAccuracy: number,
   spacingAccuracy: number,
-  alignmentAccuracy: number | null = null
+  alignmentAccuracy: number | null = null,
 ): number => {
   // If alignment accuracy is available and valid
   if (alignmentAccuracy !== null && !isNaN(alignmentAccuracy)) {
     return (
-      positionAccuracy * 0.35 +
-      dimensionAccuracy * 0.35 +
-      spacingAccuracy * 0.30 +
-      alignmentAccuracy * 0.30
-    ) / (0.35 + 0.35 + 0.30 + 0.30); // Normalize to ensure it sums to 100%
+      (positionAccuracy * 0.35 +
+        dimensionAccuracy * 0.35 +
+        spacingAccuracy * 0.3 +
+        alignmentAccuracy * 0.3) /
+      (0.35 + 0.35 + 0.3 + 0.3)
+    ) // Normalize to ensure it sums to 100%
   }
-  
+
   // If alignment data is not available, redistribute weights
   return (
-    positionAccuracy * 0.35 +
-    dimensionAccuracy * 0.35 +
-    spacingAccuracy * 0.30
-  );
-};
+    positionAccuracy * 0.35 + dimensionAccuracy * 0.35 + spacingAccuracy * 0.3
+  )
+}
 
 // Calculate overall style accuracy from individual metrics
 const calculateOverallStyleAccuracy = (
@@ -559,15 +564,12 @@ export async function extractWebsite(
   metrics: ExtractionMetrics
   timingData?: TimingData
 }> {
-  // Create timer for performance tracking
   const timer = new ExtractionTimer()
-  // Start tracking metrics
   const startTime = Date.now()
   let totalElementsDetected = 0
   let componentsExtracted = 0
   let failedExtractions = 0
 
-  // Create metrics object to collect data during extraction
   const metrics: Partial<ExtractionMetrics> = {
     url,
     timestamp: new Date().toISOString(),
@@ -583,42 +585,15 @@ export async function extractWebsite(
     fontAccuracy: 0,
   }
 
-  if (!url.startsWith('http')) {
-    throw new Error('Invalid URL format. Must start with http or https.')
-  }
-
   // Check cache first
   timer.startStep('cache_check')
   const cacheKey = `${url}-${JSON.stringify(options)}`
   const cached = componentCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY) {
-    console.log('Using cached components and metrics for', url)
     timer.endStep()
-    // Generate basic metrics for cached results
-    const cachedMetrics: ExtractionMetrics = {
-      extractionTimeMs: 0, // Minimal time since using cache
-      responseTimeMs: 50, // Very fast response time from cache
-      layoutAccuracy: 98.5, // Placeholder values for cached results
-      styleAccuracy: 99.1,
-      contentAccuracy: 97.8,
-      overallAccuracy: 98.5,
-      totalElementsDetected: cached.components.length,
-      componentsExtracted: cached.components.length,
-      extractionRate: 100,
-      failedExtractions: 0,
-      positionAccuracy: 99.2,
-      dimensionAccuracy: 98.7,
-      marginPaddingAccuracy: 97.9,
-      colorAccuracy: 99.5,
-      fontAccuracy: 98.3,
-      errors: [],
-      url,
-      timestamp: new Date().toISOString(),
-    }
-
     return {
       components: cached.components,
-      metrics: cached.metrics,
+      metrics: cached.metrics as ExtractionMetrics,
       timingData: timer.getTimingData(),
     }
   }
@@ -627,40 +602,54 @@ export async function extractWebsite(
   let browser
   try {
     timer.startStep('browser_launch')
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--window-size=1920x1080',
-      ],
-    })
+
+    // Local vs Production configuration
+    const launchOptions = IS_LOCAL
+      ? {
+          headless: 'new',
+          executablePath: CHROMIUM_PATH,
+          args: ['--disable-gpu', '--disable-dev-shm-usage', '--no-sandbox'],
+        }
+      : {
+          args: [
+            ...chromium.args,
+            '--disable-gpu',
+            '--disable-dev-shm-usage',
+            '--single-process',
+            '--no-zygote',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+          ],
+          executablePath: await CHROMIUM_PATH,
+          headless: chromium.headless,
+          ignoreHTTPSErrors: true,
+        }
+
+    browser = await puppeteer.launch(launchOptions)
     timer.endStep()
 
     timer.startStep('page_setup')
     const page = await browser.newPage()
 
-    // Set extraction timeout
-    const TIMEOUT = 90000 // 90 seconds - longer timeout for images to load
+    // Reduced timeout for serverless environments
+    const TIMEOUT = 30000
     const extractionTimeout = setTimeout(() => {
-      throw new Error('Extraction timed out after 90 seconds')
+      throw new Error('Extraction timed out after 30 seconds')
     }, TIMEOUT)
+
+    // Configure page for serverless
+    await page.setCacheEnabled(false)
+    await page.setJavaScriptEnabled(true)
     timer.endStep()
 
     try {
       timer.startStep('request_interception_setup')
-      // Allow CSS and images to load but block other heavy resources
       await page.setRequestInterception(true)
       page.on('request', (req) => {
         const resourceType = req.resourceType()
-        // Only block media and fonts, but allow images and stylesheets
-        if (['media', 'font'].includes(resourceType)) {
+        if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
           req.abort()
         } else {
-          // Allow images and other resources
           req.continue()
         }
       })
@@ -668,6 +657,7 @@ export async function extractWebsite(
       await page.setUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       )
+      timer.endStep()
 
       // Set a higher viewport for better component visibility
       await page.setViewport({
@@ -1706,25 +1696,25 @@ export async function extractWebsite(
                   )
                 : 95
 
-                const display = originalMetrics.alignment.display
-  const isFlexOrGrid =
-    display === 'flex' ||
-    display === 'inline-flex' ||
-    display === 'grid' ||
-    display === 'inline-grid'
+              const display = originalMetrics.alignment.display
+              const isFlexOrGrid =
+                display === 'flex' ||
+                display === 'inline-flex' ||
+                display === 'grid' ||
+                display === 'inline-grid'
 
-  // only compute & record alignmentAccuracy for true flex/grid elements
-  const alignmentAccuracy = isFlexOrGrid
-    ? calculateAlignmentAccuracy(
-        originalMetrics.alignment,
-        extractedMetrics.alignment,
-      )
-    : NaN
+              // only compute & record alignmentAccuracy for true flex/grid elements
+              const alignmentAccuracy = isFlexOrGrid
+                ? calculateAlignmentAccuracy(
+                    originalMetrics.alignment,
+                    extractedMetrics.alignment,
+                  )
+                : NaN
 
-  if (!isNaN(alignmentAccuracy)) {
-    alignmentAccuracyResults.push(alignmentAccuracy)
-  }
-                
+              if (!isNaN(alignmentAccuracy)) {
+                alignmentAccuracyResults.push(alignmentAccuracy)
+              }
+
               // Calculate composite metrics
               const layoutAccuracy = calculateOverallLayoutAccuracy(
                 positionAccuracy,
@@ -1851,12 +1841,13 @@ export async function extractWebsite(
         ? contentAccuracyResults.reduce((sum, val) => sum + val, 0) /
           contentAccuracyResults.length
         : 0
-      
-        const avgAlignmentAccuracy = alignmentAccuracyResults.length > 0
-        ? alignmentAccuracyResults.reduce((a, b) => a + b, 0)
-          / alignmentAccuracyResults.length
-        : null
-    
+
+      const avgAlignmentAccuracy =
+        alignmentAccuracyResults.length > 0
+          ? alignmentAccuracyResults.reduce((a, b) => a + b, 0) /
+            alignmentAccuracyResults.length
+          : null
+
       // Calculate overall accuracy as weighted average of all metrics
       const overallAccuracy =
         avgLayoutAccuracy * 0.4 +
@@ -1864,31 +1855,31 @@ export async function extractWebsite(
         avgContentAccuracy * 0.2
 
       // Populate the final metrics object
-// Populate the final metrics object
-const finalMetrics: ExtractionMetrics = {
-  extractionTimeMs,
-  responseTimeMs: extractionTimeMs, // Same for now
-  layoutAccuracy: avgLayoutAccuracy,
-  styleAccuracy: avgStyleAccuracy,
-  contentAccuracy: avgContentAccuracy,
-  overallAccuracy,
-  totalElementsDetected,
-  componentsExtracted,
-  extractionRate:
-    totalElementsDetected > 0
-      ? (componentsExtracted / totalElementsDetected) * 100
-      : 0,
-  failedExtractions,
-  positionAccuracy: avgPositionAccuracy,
-  dimensionAccuracy: avgDimensionAccuracy,
-  marginPaddingAccuracy: avgMarginPaddingAccuracy,
-  alignmentAccuracy: avgAlignmentAccuracy,
-  colorAccuracy: avgColorAccuracy,
-  fontAccuracy: avgFontAccuracy,
-  errors: metrics.errors || [],
-  url,
-  timestamp: new Date().toISOString(),
-};
+      // Populate the final metrics object
+      const finalMetrics: ExtractionMetrics = {
+        extractionTimeMs,
+        responseTimeMs: extractionTimeMs, // Same for now
+        layoutAccuracy: avgLayoutAccuracy,
+        styleAccuracy: avgStyleAccuracy,
+        contentAccuracy: avgContentAccuracy,
+        overallAccuracy,
+        totalElementsDetected,
+        componentsExtracted,
+        extractionRate:
+          totalElementsDetected > 0
+            ? (componentsExtracted / totalElementsDetected) * 100
+            : 0,
+        failedExtractions,
+        positionAccuracy: avgPositionAccuracy,
+        dimensionAccuracy: avgDimensionAccuracy,
+        marginPaddingAccuracy: avgMarginPaddingAccuracy,
+        alignmentAccuracy: avgAlignmentAccuracy,
+        colorAccuracy: avgColorAccuracy,
+        fontAccuracy: avgFontAccuracy,
+        errors: metrics.errors || [],
+        url,
+        timestamp: new Date().toISOString(),
+      }
 
       // Store in cache
       componentCache.set(cacheKey, {

@@ -28,6 +28,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/react-window": "^1.8.8",
     "cheerio": "^1.0.0",
+    "chrome-aws-lambda": "^10.1.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.4.7",
@@ -48,6 +49,7 @@
   "devDependencies": {
     "@remix-run/dev": "^2.9.2",
     "@remix-run/eslint-config": "^2.9.2",
+    "@sparticuz/chromium": "^133.0.0",
     "@types/lodash": "^4.17.16",
     "@types/prismjs": "^1.26.5",
     "@types/react": "^18.2.20",
