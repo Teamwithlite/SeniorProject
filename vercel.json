@@ -1,0 +1,36 @@
+{
+    "version": 2,
+    "functions": {
+      "build/server/index.js": {
+        "memory": 1024,
+        "maxDuration": 30
+      }
+    },
+    "builds": [
+      {
+        "src": "build/server/index.js",
+        "use": "@vercel/node"
+      },
+      {
+        "src": "build/client/**",
+        "use": "@vercel/static"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/build/client/(.*)",
+        "headers": { "Cache-Control": "public, max-age=31536000, immutable" },
+        "continue": true
+      },
+      {
+        "handle": "filesystem"
+      },
+      {
+        "src": "/(.*)",
+        "dest": "build/server/index.js"
+      }
+    ],
+    "env": {
+      "VERCEL_SERVERLESS": "1"
+    }
+  }

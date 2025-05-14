@@ -1,23 +1,21 @@
 // app/services/extractor.ts
-import puppeteer from 'puppeteer'
-import type { ExtractionMetrics } from '~/components/MetricsPanel'
-let chromium: any
-if (process.env.NODE_ENV === 'production') {
-  chromium = await import('@sparticuz/chromium').catch(() => null)
-}
+import puppeteer from 'puppeteer-core'; 
+import chromium from '@sparticuz/chromium'; // Import correctly
+import type { ExtractionMetrics } from '~/components/MetricsPanel';
+
 /**
  * Clean HTML while preserving necessary styles and structure
  */
 const cleanHTML = (html: string | undefined): string => {
   // Add safety check to prevent the error
-  if (!html) return ''
+  if (!html) return '';
 
   return (
     html
       // Remove script tags but preserve style tags
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-  )
-}
+  );
+};
 
 // Helper function for calculating metrics
 const calculateAccuracy = (
@@ -25,40 +23,37 @@ const calculateAccuracy = (
   extractedValue: number,
   tolerance: number,
 ): number => {
-  const diff = Math.abs(originalValue - extractedValue)
-  if (diff <= tolerance) return 100
+  const diff = Math.abs(originalValue - extractedValue);
+  if (diff <= tolerance) return 100;
 
   // Calculate as percentage accuracy based on tolerance
   const accuracy = Math.max(
     0,
     100 - (diff - tolerance) / (originalValue * 0.01),
-  )
-  return accuracy
-}
+  );
+  return accuracy;
+};
 
 // Add these helper functions at the top of your file, after the existing calculateAccuracy function
-const IS_LOCAL = process.env.NODE_ENV === 'development'
-const CHROMIUM_PATH = IS_LOCAL
-  ? process.env.CHROMIUM_EXECUTABLE_PATH ||
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe' // Windows default
-  : chromium.executablePath()
+const IS_LOCAL = process.env.NODE_ENV === 'development';
+
 const calculatePositionAccuracy = (
   original: { x: number; y: number },
   extracted: { x: number; y: number },
 ): number => {
   // Calculate absolute deviations
-  const xDeviation = Math.abs(original.x - extracted.x)
-  const yDeviation = Math.abs(original.y - extracted.y)
+  const xDeviation = Math.abs(original.x - extracted.x);
+  const yDeviation = Math.abs(original.y - extracted.y);
 
   // Calculate relative accuracy for each dimension
   // Using a linear scale where deviation of 0px = 100% and maxDeviation = 0%
-  const maxDeviation = 10 // Maximum meaningful deviation in pixels
-  const xAccuracy = Math.max(0, 100 * (1 - xDeviation / maxDeviation))
-  const yAccuracy = Math.max(0, 100 * (1 - yDeviation / maxDeviation))
+  const maxDeviation = 10; // Maximum meaningful deviation in pixels
+  const xAccuracy = Math.max(0, 100 * (1 - xDeviation / maxDeviation));
+  const yAccuracy = Math.max(0, 100 * (1 - yDeviation / maxDeviation));
 
   // Return the average of x and y accuracy
-  return (xAccuracy + yAccuracy) / 2
-}
+  return (xAccuracy + yAccuracy) / 2;
+};
 
 const calculateDimensionAccuracy = (
   original: { width: number; height: number },
@@ -66,17 +61,18 @@ const calculateDimensionAccuracy = (
 ): number => {
   // Calculate relative deviations as percentage of original dimensions
   const widthDeviation =
-    Math.abs(original.width - extracted.width) / original.width
+    Math.abs(original.width - extracted.width) / original.width;
   const heightDeviation =
-    Math.abs(original.height - extracted.height) / original.height
+    Math.abs(original.height - extracted.height) / original.height;
 
   // Calculate accuracy (0% deviation = 100% accuracy, 10% deviation = 0% accuracy)
-  const maxDeviation = 0.1 // 10% deviation is considered maximal error
-  const widthAccuracy = Math.max(0, 100 * (1 - widthDeviation / maxDeviation))
-  const heightAccuracy = Math.max(0, 100 * (1 - heightDeviation / maxDeviation))
+  const maxDeviation = 0.1; // 10% deviation is considered maximal error
+  const widthAccuracy = Math.max(0, 100 * (1 - widthDeviation / maxDeviation));
+  const heightAccuracy = Math.max(0, 100 * (1 - heightDeviation / maxDeviation));
 
-  return (widthAccuracy + heightAccuracy) / 2
-}
+  return (widthAccuracy + heightAccuracy) / 2;
+};
+
 const calculateSpacingAccuracy = (
   original: { margin: string; padding: string },
   extracted: { margin: string; padding: string },
@@ -85,45 +81,45 @@ const calculateSpacingAccuracy = (
 
   // Helper to parse spacing values like "10px 5px 10px 5px" into numbers
   const parseSpacing = (spacingStr: string): number[] => {
-    if (!spacingStr) return [0, 0, 0, 0]
+    if (!spacingStr) return [0, 0, 0, 0];
 
-    const values = spacingStr.split(' ').map((val) => parseInt(val, 10) || 0)
+    const values = spacingStr.split(' ').map((val) => parseInt(val, 10) || 0);
 
     // Expand to 4 values if abbreviated
-    if (values.length === 1) return [values[0], values[0], values[0], values[0]]
-    if (values.length === 2) return [values[0], values[1], values[0], values[1]]
-    if (values.length === 3) return [values[0], values[1], values[2], values[1]]
-    return values.slice(0, 4) // Take only first 4 values
-  }
+    if (values.length === 1) return [values[0], values[0], values[0], values[0]];
+    if (values.length === 2) return [values[0], values[1], values[0], values[1]];
+    if (values.length === 3) return [values[0], values[1], values[2], values[1]];
+    return values.slice(0, 4); // Take only first 4 values
+  };
 
-  const originalMargin = parseSpacing(original.margin)
-  const extractedMargin = parseSpacing(extracted.margin)
+  const originalMargin = parseSpacing(original.margin);
+  const extractedMargin = parseSpacing(extracted.margin);
 
-  const originalPadding = parseSpacing(original.padding)
-  const extractedPadding = parseSpacing(extracted.padding)
+  const originalPadding = parseSpacing(original.padding);
+  const extractedPadding = parseSpacing(extracted.padding);
 
   // Calculate deviations for each side
-  let deviationSum = 0
-  let deviationCount = 0
+  let deviationSum = 0;
+  let deviationCount = 0;
 
   for (let i = 0; i < 4; i++) {
     // Margin deviations
-    const marginDeviation = Math.abs(originalMargin[i] - extractedMargin[i])
-    deviationSum += marginDeviation <= 2 ? 0 : marginDeviation - 2
-    deviationCount++
+    const marginDeviation = Math.abs(originalMargin[i] - extractedMargin[i]);
+    deviationSum += marginDeviation <= 2 ? 0 : marginDeviation - 2;
+    deviationCount++;
 
     // Padding deviations
-    const paddingDeviation = Math.abs(originalPadding[i] - extractedPadding[i])
-    deviationSum += paddingDeviation <= 2 ? 0 : paddingDeviation - 2
-    deviationCount++
+    const paddingDeviation = Math.abs(originalPadding[i] - extractedPadding[i]);
+    deviationSum += paddingDeviation <= 2 ? 0 : paddingDeviation - 2;
+    deviationCount++;
   }
 
   // Calculate average deviation beyond tolerance
-  const avgDeviation = deviationCount > 0 ? deviationSum / deviationCount : 0
+  const avgDeviation = deviationCount > 0 ? deviationSum / deviationCount : 0;
 
   // Calculate accuracy percentage - max penalty for average deviation of 10px beyond tolerance
-  return Math.max(0, 100 - avgDeviation * 10)
-}
+  return Math.max(0, 100 - avgDeviation * 10);
+};
 
 const calculateColorAccuracy = (
   originalColor: string,
@@ -135,51 +131,51 @@ const calculateColorAccuracy = (
   const toRGB = (color: string): [number, number, number] => {
     // For hex colors
     if (color.startsWith('#')) {
-      let hex = color.substring(1)
+      let hex = color.substring(1);
 
       // Convert shorthand hex (#fff) to full form (#ffffff)
       if (hex.length === 3) {
         hex = hex
           .split('')
           .map((c) => c + c)
-          .join('')
+          .join('');
       }
 
       return [
         parseInt(hex.substr(0, 2), 16),
         parseInt(hex.substr(2, 2), 16),
         parseInt(hex.substr(4, 2), 16),
-      ]
+      ];
     }
 
     // For rgb/rgba colors
-    const rgbMatch = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)
+    const rgbMatch = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
     if (rgbMatch) {
       return [
         parseInt(rgbMatch[1], 10),
         parseInt(rgbMatch[2], 10),
         parseInt(rgbMatch[3], 10),
-      ]
+      ];
     }
 
     // Default fallback for unknown formats
-    return [0, 0, 0]
-  }
+    return [0, 0, 0];
+  };
 
   // Convert both colors to RGB
-  const rgb1 = toRGB(originalColor)
-  const rgb2 = toRGB(extractedColor)
+  const rgb1 = toRGB(originalColor);
+  const rgb2 = toRGB(extractedColor);
 
   // Calculate deviation for each component
   const deviations = [
     Math.abs(rgb1[0] - rgb2[0]),
     Math.abs(rgb1[1] - rgb2[1]),
     Math.abs(rgb1[2] - rgb2[2]),
-  ]
+  ];
 
   // Check if within tolerance (±1 in hex = ±1 in RGB)
   if (deviations[0] <= 1 && deviations[1] <= 1 && deviations[2] <= 1) {
-    return 100
+    return 100;
   }
 
   // Calculate average deviation beyond tolerance
@@ -187,11 +183,11 @@ const calculateColorAccuracy = (
     (Math.max(0, deviations[0] - 1) +
       Math.max(0, deviations[1] - 1) +
       Math.max(0, deviations[2] - 1)) /
-    3
+    3;
 
   // Calculate accuracy percentage - max penalty for average deviation of 10
-  return Math.max(0, 100 - avgDeviation * 10)
-}
+  return Math.max(0, 100 - avgDeviation * 10);
+};
 
 const calculateTypographyAccuracy = (
   original: { fontSize: string; lineHeight: string; letterSpacing: string },
@@ -203,65 +199,65 @@ const calculateTypographyAccuracy = (
 
   // Helper to extract numeric value from CSS dimension
   const extractNumeric = (value: string): number => {
-    const match = value.match(/([\d.]+)/)
-    return match ? parseFloat(match[1]) : 0
-  }
+    const match = value.match(/([\d.]+)/);
+    return match ? parseFloat(match[1]) : 0;
+  };
 
-  const originalFontSize = extractNumeric(original.fontSize)
-  const extractedFontSize = extractNumeric(extracted.fontSize)
+  const originalFontSize = extractNumeric(original.fontSize);
+  const extractedFontSize = extractNumeric(extracted.fontSize);
 
-  const originalLineHeight = extractNumeric(original.lineHeight)
-  const extractedLineHeight = extractNumeric(extracted.lineHeight)
+  const originalLineHeight = extractNumeric(original.lineHeight);
+  const extractedLineHeight = extractNumeric(extracted.lineHeight);
 
-  const originalLetterSpacing = extractNumeric(original.letterSpacing)
-  const extractedLetterSpacing = extractNumeric(extracted.letterSpacing)
+  const originalLetterSpacing = extractNumeric(original.letterSpacing);
+  const extractedLetterSpacing = extractNumeric(extracted.letterSpacing);
 
   // Calculate deviations
-  const fontSizeDeviation = Math.abs(originalFontSize - extractedFontSize)
-  const lineHeightDeviation = Math.abs(originalLineHeight - extractedLineHeight)
+  const fontSizeDeviation = Math.abs(originalFontSize - extractedFontSize);
+  const lineHeightDeviation = Math.abs(originalLineHeight - extractedLineHeight);
   const letterSpacingDeviation = Math.abs(
     originalLetterSpacing - extractedLetterSpacing,
-  )
+  );
 
   // Calculate accuracy for each aspect
   const fontSizeAccuracy =
     fontSizeDeviation <= 0.5
       ? 100
-      : Math.max(0, 100 - (fontSizeDeviation - 0.5) * 20)
+      : Math.max(0, 100 - (fontSizeDeviation - 0.5) * 20);
   const lineHeightAccuracy =
     lineHeightDeviation <= 1
       ? 100
-      : Math.max(0, 100 - (lineHeightDeviation - 1) * 10)
+      : Math.max(0, 100 - (lineHeightDeviation - 1) * 10);
   const letterSpacingAccuracy =
     letterSpacingDeviation <= 0.1
       ? 100
-      : Math.max(0, 100 - (letterSpacingDeviation - 0.1) * 100)
+      : Math.max(0, 100 - (letterSpacingDeviation - 0.1) * 100);
 
   // Weighted average for overall typography accuracy
   return (
     fontSizeAccuracy * 0.5 +
     lineHeightAccuracy * 0.3 +
     letterSpacingAccuracy * 0.2
-  )
-}
+  );
+};
 
 // Calculate flex/grid alignment accuracy
 const calculateAlignmentAccuracy = (
   original: {
-    display: string
-    flexDirection: string
-    justifyContent: string
-    alignItems: string
+    display: string;
+    flexDirection: string;
+    justifyContent: string;
+    alignItems: string;
   },
   extracted: {
-    display: string
-    flexDirection: string
-    justifyContent: string
-    alignItems: string
+    display: string;
+    flexDirection: string;
+    justifyContent: string;
+    alignItems: string;
   },
 ): number => {
   // Check if the layout system matches (flex, grid, etc)
-  const sameDisplayType = original.display === extracted.display
+  const sameDisplayType = original.display === extracted.display;
 
   // For flex layouts, check direction and alignment properties
   if (
@@ -272,10 +268,10 @@ const calculateAlignmentAccuracy = (
       original.flexDirection === extracted.flexDirection,
       original.justifyContent === extracted.justifyContent,
       original.alignItems === extracted.alignItems,
-    ]
+    ];
 
-    const matchCount = matches.filter(Boolean).length
-    return (matchCount / matches.length) * 100
+    const matchCount = matches.filter(Boolean).length;
+    return (matchCount / matches.length) * 100;
   }
 
   // For grid layouts, we would check grid template properties (simplified here)
@@ -283,12 +279,12 @@ const calculateAlignmentAccuracy = (
     sameDisplayType &&
     (original.display === 'grid' || original.display === 'inline-grid')
   ) {
-    return 100 // Simplified - in a real implementation, check grid template properties
+    return 100; // Simplified - in a real implementation, check grid template properties
   }
 
   // If display type doesn't match, lower accuracy
-  return sameDisplayType ? 80 : 50
-}
+  return sameDisplayType ? 80 : 50;
+};
 
 // Calculate overall layout accuracy from individual metrics
 const calculateOverallLayoutAccuracy = (
@@ -305,117 +301,117 @@ const calculateOverallLayoutAccuracy = (
         spacingAccuracy * 0.3 +
         alignmentAccuracy * 0.3) /
       (0.35 + 0.35 + 0.3 + 0.3)
-    ) // Normalize to ensure it sums to 100%
+    ); // Normalize to ensure it sums to 100%
   }
 
   // If alignment data is not available, redistribute weights
   return (
     positionAccuracy * 0.35 + dimensionAccuracy * 0.35 + spacingAccuracy * 0.3
-  )
-}
+  );
+};
 
 // Calculate overall style accuracy from individual metrics
 const calculateOverallStyleAccuracy = (
   colorAccuracy: number,
   typographyAccuracy: number,
 ): number => {
-  return colorAccuracy * 0.5 + typographyAccuracy * 0.5
-}
+  return colorAccuracy * 0.5 + typographyAccuracy * 0.5;
+};
 
 // Import our custom types from types.ts
-import type { TagCounts, ExtractedComponent, ExtractedImageInfo } from '~/types'
+import type { TagCounts, ExtractedComponent, ExtractedImageInfo } from '~/types';
 
 // Define interface for component selectors
 interface ComponentSelector {
-  type: string
-  selector: string
-  priority: number
-  excludeSelector?: string
+  type: string;
+  selector: string;
+  priority: number;
+  excludeSelector?: string;
   metadata?: {
-    patternIndex: number
-    containerSelector: string
-    childCount: number
-  }
+    patternIndex: number;
+    containerSelector: string;
+    childCount: number;
+  };
 }
 
 // Timer implementation for performance tracking
 interface TimingData {
   steps: {
-    name: string
-    durationMs: number
-    startTime: number
-    endTime: number
-  }[]
-  totalDurationMs: number
-  startTime: number
-  endTime: number
+    name: string;
+    durationMs: number;
+    startTime: number;
+    endTime: number;
+  }[];
+  totalDurationMs: number;
+  startTime: number;
+  endTime: number;
   bottleneck: {
-    step: string
-    durationMs: number
-    percentageOfTotal: number
-  } | null
+    step: string;
+    durationMs: number;
+    percentageOfTotal: number;
+  } | null;
 }
 
 class ExtractionTimer {
   private steps: {
-    name: string
-    durationMs: number
-    startTime: number
-    endTime: number
-  }[] = []
-  private currentStep: string | null = null
-  private stepStartTime: number = 0
-  private extractionStartTime: number = 0
+    name: string;
+    durationMs: number;
+    startTime: number;
+    endTime: number;
+  }[] = [];
+  private currentStep: string | null = null;
+  private stepStartTime: number = 0;
+  private extractionStartTime: number = 0;
 
   constructor() {
-    this.extractionStartTime = Date.now()
+    this.extractionStartTime = Date.now();
   }
 
   startStep(stepName: string): void {
     // If there's a current step, end it first
     if (this.currentStep) {
-      this.endStep()
+      this.endStep();
     }
 
-    this.currentStep = stepName
-    this.stepStartTime = Date.now()
-    console.log(`Starting step: ${stepName}`)
+    this.currentStep = stepName;
+    this.stepStartTime = Date.now();
+    console.log(`Starting step: ${stepName}`);
   }
 
   endStep(): void {
-    if (!this.currentStep) return
+    if (!this.currentStep) return;
 
-    const endTime = Date.now()
-    const duration = endTime - this.stepStartTime
+    const endTime = Date.now();
+    const duration = endTime - this.stepStartTime;
 
     this.steps.push({
       name: this.currentStep,
       durationMs: duration,
       startTime: this.stepStartTime,
       endTime,
-    })
+    });
 
-    console.log(`Completed step: ${this.currentStep} in ${duration}ms`)
-    this.currentStep = null
+    console.log(`Completed step: ${this.currentStep} in ${duration}ms`);
+    this.currentStep = null;
   }
 
   getTimingData(): TimingData {
     // End any ongoing step
     if (this.currentStep) {
-      this.endStep()
+      this.endStep();
     }
 
-    const endTime = Date.now()
-    const totalDuration = endTime - this.extractionStartTime
+    const endTime = Date.now();
+    const totalDuration = endTime - this.extractionStartTime;
 
     // Find the bottleneck (step with longest duration)
-    let bottleneckStep = null
-    let maxDuration = 0
+    let bottleneckStep = null;
+    let maxDuration = 0;
 
     for (const step of this.steps) {
       if (step.durationMs > maxDuration) {
-        maxDuration = step.durationMs
-        bottleneckStep = step
+        maxDuration = step.durationMs;
+        bottleneckStep = step;
       }
     }
 
@@ -425,7 +421,7 @@ class ExtractionTimer {
           durationMs: bottleneckStep.durationMs,
           percentageOfTotal: (bottleneckStep.durationMs / totalDuration) * 100,
         }
-      : null
+      : null;
 
     return {
       steps: this.steps,
@@ -433,13 +429,13 @@ class ExtractionTimer {
       startTime: this.extractionStartTime,
       endTime,
       bottleneck,
-    }
+    };
   }
 
   reset(): void {
-    this.steps = []
-    this.currentStep = null
-    this.extractionStartTime = Date.now()
+    this.steps = [];
+    this.currentStep = null;
+    this.extractionStartTime = Date.now();
   }
 }
 // Base selectors that work across different websites
@@ -510,15 +506,15 @@ const COMPONENT_SELECTORS: ComponentSelector[] = [
       'figure, picture, div:has(> img + div), div:has(> img + span), div:has(> img + p)',
     priority: 4,
   },
-]
+];
 
 // Generate a more accurate hash for component deduplication
 const generateComponentHash = (
   component: Partial<ExtractedComponent>,
 ): string => {
   // Adding safety checks for undefined values
-  const type = component.type || ''
-  const html = component.html || ''
+  const type = component.type || '';
+  const html = component.html || '';
 
   // Create a simplified representation focusing on content fingerprint
   const hashContent = {
@@ -537,20 +533,20 @@ const generateComponentHash = (
         .match(/>([^<]{3,50})</g)
         ?.slice(0, 3)
         .join('') || '',
-  }
-  return JSON.stringify(hashContent)
-}
+  };
+  return JSON.stringify(hashContent);
+};
 
 // Enhanced cache with better expiration strategy
 const componentCache = new Map<
   string,
   {
-    timestamp: number
-    components: ExtractedComponent[]
-    metrics: ExtractionMetrics
+    timestamp: number;
+    components: ExtractedComponent[];
+    metrics: ExtractionMetrics;
   }
->()
-const CACHE_EXPIRY = 60 * 60 * 1000 // 1 hour
+>();
+const CACHE_EXPIRY = 60 * 60 * 1000; // 1 hour
 
 /**
  * Extract UI components from a given URL with a pattern-based approach
@@ -558,20 +554,20 @@ const CACHE_EXPIRY = 60 * 60 * 1000 // 1 hour
 export async function extractWebsite(
   url: string,
   options: {
-    maxComponents?: number
-    componentTypes?: string[]
-    skipScreenshots?: boolean
+    maxComponents?: number;
+    componentTypes?: string[];
+    skipScreenshots?: boolean;
   } = {},
 ): Promise<{
-  components: ExtractedComponent[]
-  metrics: ExtractionMetrics
-  timingData?: TimingData
+  components: ExtractedComponent[];
+  metrics: ExtractionMetrics;
+  timingData?: TimingData;
 }> {
-  const timer = new ExtractionTimer()
-  const startTime = Date.now()
-  let totalElementsDetected = 0
-  let componentsExtracted = 0
-  let failedExtractions = 0
+  const timer = new ExtractionTimer();
+  const startTime = Date.now();
+  let totalElementsDetected = 0;
+  let componentsExtracted = 0;
+  let failedExtractions = 0;
 
   const metrics: Partial<ExtractionMetrics> = {
     url,
@@ -586,102 +582,167 @@ export async function extractWebsite(
     marginPaddingAccuracy: 0,
     colorAccuracy: 0,
     fontAccuracy: 0,
-  }
+  };
 
   // Check cache first
-  timer.startStep('cache_check')
-  const cacheKey = `${url}-${JSON.stringify(options)}`
-  const cached = componentCache.get(cacheKey)
+  timer.startStep('cache_check');
+  const cacheKey = `${url}-${JSON.stringify(options)}`;
+  const cached = componentCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY) {
-    timer.endStep()
+    timer.endStep();
     return {
       components: cached.components,
       metrics: cached.metrics as ExtractionMetrics,
       timingData: timer.getTimingData(),
-    }
+    };
   }
-  timer.endStep()
+  timer.endStep();
 
-  let browser
+  // Check if we're in Vercel's production environment
+  const isVercelProd = process.env.VERCEL === '1';
+  
+  // If we're in Vercel production and this is enabled in options, use mock data
+  if (isVercelProd && options.useMockData) {
+    const mockComponents: ExtractedComponent[] = [
+      // Add a few sample components here
+      {
+        type: 'buttons',
+        name: 'Sample Button',
+        html: '<button class="btn btn-primary">Button</button>',
+        cleanHtml: '<button class="btn btn-primary">Button</button>',
+        screenshot: '',
+        styles: {
+          backgroundColor: '#4361ee',
+          color: '#ffffff',
+          padding: '10px 20px',
+          borderRadius: '4px',
+        },
+        metadata: {
+          dimensions: { width: 120, height: 40 },
+          externalStyles: '',
+          sourcePage: url,
+          extractedAt: new Date().toISOString(),
+        },
+      },
+      // Add more sample components as needed
+    ];
+    
+    const mockMetrics: ExtractionMetrics = {
+      extractionTimeMs: 1000,
+      responseTimeMs: 1000,
+      layoutAccuracy: 95,
+      styleAccuracy: 95,
+      contentAccuracy: 95,
+      overallAccuracy: 95,
+      totalElementsDetected: 10,
+      componentsExtracted: mockComponents.length,
+      extractionRate: 50,
+      failedExtractions: 0,
+      positionAccuracy: 95,
+      dimensionAccuracy: 95,
+      marginPaddingAccuracy: 95,
+      alignmentAccuracy: 95,
+      colorAccuracy: 95,
+      fontAccuracy: 95,
+      errors: [],
+      url,
+      timestamp: new Date().toISOString(),
+    };
+    
+    return {
+      components: mockComponents,
+      metrics: mockMetrics,
+    };
+  }
+
+  let browser;
   try {
-    timer.startStep('browser_launch')
+    timer.startStep('browser_launch');
 
-    // Local vs Production configuration
-    const launchOptions = IS_LOCAL
-      ? {
-          headless: 'new',
-          executablePath: CHROMIUM_PATH,
-          args: ['--disable-gpu', '--disable-dev-shm-usage', '--no-sandbox'],
-        }
-      : {
-          args: [
-            ...chromium.args,
-            '--disable-gpu',
-            '--disable-dev-shm-usage',
-            '--single-process',
-            '--no-zygote',
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-          ],
-          executablePath: await CHROMIUM_PATH,
-          headless: chromium.headless,
-          ignoreHTTPSErrors: true,
-        }
+    // Configure chromium for serverless environment
+    let executablePath;
+    let launchOptions;
+    
+    if (IS_LOCAL) {
+      // Development environment
+      launchOptions = {
+        headless: 'new',
+        args: ['--disable-gpu', '--disable-dev-shm-usage', '--no-sandbox'],
+      };
+    } else {
+      // Production/serverless environment
+      executablePath = await chromium.executablePath();
+      
+      launchOptions = {
+        args: [
+          ...chromium.args,
+          '--disable-gpu',
+          '--disable-dev-shm-usage',
+          '--single-process',
+          '--no-zygote',
+          '--no-sandbox',
+        ],
+        defaultViewport: chromium.defaultViewport,
+        executablePath,
+        headless: chromium.headless,
+        ignoreHTTPSErrors: true,
+      };
+    }
 
-    browser = await puppeteer.launch(launchOptions)
-    timer.endStep()
+    browser = await puppeteer.launch(launchOptions);
+    timer.endStep();
 
-    timer.startStep('page_setup')
-    const page = await browser.newPage()
+    timer.startStep('page_setup');
+    const page = await browser.newPage();
 
     // Reduced timeout for serverless environments
-    const TIMEOUT = 30000
+    const TIMEOUT = 25000; // Reduced for serverless
     const extractionTimeout = setTimeout(() => {
-      throw new Error('Extraction timed out after 30 seconds')
-    }, TIMEOUT)
+      throw new Error('Extraction timed out after 25 seconds');
+    }, TIMEOUT);
 
     // Configure page for serverless
-    await page.setCacheEnabled(false)
-    await page.setJavaScriptEnabled(true)
-    timer.endStep()
+    await page.setCacheEnabled(false);
+    await page.setJavaScriptEnabled(true);
+    timer.endStep();
 
     try {
-      timer.startStep('request_interception_setup')
-      await page.setRequestInterception(true)
+      timer.startStep('request_interception_setup');
+      await page.setRequestInterception(true);
       page.on('request', (req) => {
-        const resourceType = req.resourceType()
+        const resourceType = req.resourceType();
         if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
-          req.abort()
+          req.abort();
         } else {
-          req.continue()
+          req.continue();
         }
-      })
+      });
 
       await page.setUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      )
-      timer.endStep()
+      );
+      timer.endStep();
 
       // Set a higher viewport for better component visibility
       await page.setViewport({
         width: 1920,
         height: 1080,
         deviceScaleFactor: 1,
-      })
-      timer.endStep()
+      });
+      timer.endStep();
 
-      timer.startStep('inject_helpers')
+      timer.startStep('inject_helpers');
       // Inject our custom style preservation helpers
       await page.evaluateOnNewDocument(() => {
         // Helper to get computed styles for an element
         window.getComputedStylesAsInline = (element) => {
           try {
-            if (!element) return ''
+            if (!element) return '';
 
-            const computedStyle = window.getComputedStyle(element)
-            if (!computedStyle) return ''
+            const computedStyle = window.getComputedStyle(element);
+            if (!computedStyle) return '';
 
-            let inlineStyles = ''
+            let inlineStyles = '';
 
             // Comprehensive properties for accurate visual reproduction
             const styleProperties = [
@@ -795,45 +856,45 @@ export async function extractWebsite(
               'cursor',
               'pointer-events',
               'user-select',
-            ]
+            ];
 
             // Apply only non-empty values
             styleProperties.forEach((prop) => {
               try {
-                const value = computedStyle.getPropertyValue(prop)
+                const value = computedStyle.getPropertyValue(prop);
                 if (value && value !== '') {
-                  inlineStyles += `${prop}: ${value}; `
+                  inlineStyles += `${prop}: ${value}; `;
                 }
               } catch (e) {
                 // Skip properties that cause errors
               }
-            })
+            });
 
-            return inlineStyles
+            return inlineStyles;
           } catch (e) {
-            console.error('Error in getComputedStylesAsInline:', e)
-            return ''
+            console.error('Error in getComputedStylesAsInline:', e);
+            return '';
           }
-        }
+        };
 
         // Create a function to extract external CSS with safety checks
         window.getExternalStylesForElement = (element: Element) => {
           try {
-            if (!element) return ''
+            if (!element) return '';
 
             // Get all the stylesheets in the document
-            const sheets = Array.from(document.styleSheets || [])
-            const relevantStyles: string[] = []
+            const sheets = Array.from(document.styleSheets || []);
+            const relevantStyles: string[] = [];
 
             sheets.forEach((sheet) => {
               try {
                 // Get all CSS rules from the stylesheet
-                const rules = Array.from(sheet.cssRules || sheet.rules || [])
+                const rules = Array.from(sheet.cssRules || sheet.rules || []);
 
                 rules.forEach((rule) => {
                   if (rule.type === 1) {
                     // CSSStyleRule
-                    const styleRule = rule
+                    const styleRule = rule;
                     // Check if this rule applies to our element
                     try {
                       if (
@@ -842,101 +903,101 @@ export async function extractWebsite(
                           (styleRule as CSSStyleRule).selectorText,
                         )
                       ) {
-                        relevantStyles.push(rule.cssText)
+                        relevantStyles.push(rule.cssText);
                       }
                     } catch (e) {
                       // Skip selectors that cause errors
                     }
                   }
-                })
+                });
               } catch (e) {
                 // Skip cross-domain stylesheets
-                console.log('Could not access stylesheet rules')
+                console.log('Could not access stylesheet rules');
               }
-            })
+            });
 
-            return relevantStyles.join('\n')
+            return relevantStyles.join('\n');
           } catch (e) {
-            console.error('Error extracting external styles:', e)
-            return ''
+            console.error('Error extracting external styles:', e);
+            return '';
           }
-        }
+        };
 
         // Get document-level styles that might affect components
         window.getBodyStyles = () => {
           try {
-            const bodyStyles = window.getComputedStyle(document.body)
+            const bodyStyles = window.getComputedStyle(document.body);
             return {
               backgroundColor: bodyStyles.backgroundColor || '#ffffff',
               color: bodyStyles.color || '#000000',
               fontFamily: bodyStyles.fontFamily || 'inherit',
               fontSize: bodyStyles.fontSize || 'inherit',
               lineHeight: bodyStyles.lineHeight || 'normal',
-            }
+            };
           } catch (e) {
-            console.error('Error getting body styles:', e)
+            console.error('Error getting body styles:', e);
             return {
               backgroundColor: '#ffffff',
               color: '#000000',
               fontFamily: 'inherit',
               fontSize: 'inherit',
               lineHeight: 'normal',
-            }
+            };
           }
-        }
+        };
 
         // NEW: Pattern detection functions for repeated components
         window.detectRepeatedPatterns = () => {
           try {
             // Find elements that are likely to be part of a collection
             const patterns: Array<{
-              container: Element
-              containerSelector: string
-              childSelector: string
-              childTag: string
-              childCount: number
-              hasImages: boolean
-              hasText: boolean
-              sampleHtml: string
-            }> = []
+              container: Element;
+              containerSelector: string;
+              childSelector: string;
+              childTag: string;
+              childCount: number;
+              hasImages: boolean;
+              hasText: boolean;
+              sampleHtml: string;
+            }> = [];
 
             // Look for grid layouts (CSS Grid or Flexbox)
             const gridContainers = Array.from(
               document.querySelectorAll('*'),
             ).filter((el) => {
-              const style = window.getComputedStyle(el)
+              const style = window.getComputedStyle(el);
               return (
                 style.display === 'grid' ||
                 style.display === 'flex' ||
                 el.className.includes('grid') ||
                 el.className.includes('list') ||
                 el.className.includes('cards')
-              )
-            })
+              );
+            });
 
             gridContainers.forEach((container, idx) => {
               // Get direct children that are similar in structure
-              const children = Array.from(container.children)
+              const children = Array.from(container.children);
 
               // Skip if too few children
-              if (children.length < 3) return
+              if (children.length < 3) return;
 
               // Check if children have similar structure (similar tag names, similar dimensions)
-              const tagCounts: TagCounts = {}
+              const tagCounts: TagCounts = {};
               children.forEach((child) => {
-                const tag = child.tagName.toLowerCase()
-                tagCounts[tag] = (tagCounts[tag] || 0) + 1
-              })
+                const tag = child.tagName.toLowerCase();
+                tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+              });
 
               // Find the most common tag
-              let mostCommonTag = ''
-              let highestCount = 0
+              let mostCommonTag = '';
+              let highestCount = 0;
               Object.entries(tagCounts).forEach(([tag, count]) => {
                 if (count > highestCount) {
-                  mostCommonTag = tag
-                  highestCount = count as number
+                  mostCommonTag = tag;
+                  highestCount = count as number;
                 }
-              })
+              });
 
               // If most children have the same tag, this is probably a collection
               if (highestCount >= children.length * 0.7) {
@@ -944,23 +1005,23 @@ export async function extractWebsite(
 
                 // Get a sample of child dimensions to check uniformity
                 const dimensions = children.slice(0, 5).map((child) => {
-                  const rect = child.getBoundingClientRect()
-                  return { width: rect.width, height: rect.height }
-                })
+                  const rect = child.getBoundingClientRect();
+                  return { width: rect.width, height: rect.height };
+                });
 
                 // Check if dimensions are similar
                 const averageWidth =
                   dimensions.reduce((sum, dim) => sum + dim.width, 0) /
-                  dimensions.length
+                  dimensions.length;
                 const averageHeight =
                   dimensions.reduce((sum, dim) => sum + dim.height, 0) /
-                  dimensions.length
+                  dimensions.length;
 
                 const similarDimensions = dimensions.every(
                   (dim) =>
                     Math.abs(dim.width - averageWidth) < averageWidth * 0.3 &&
                     Math.abs(dim.height - averageHeight) < averageHeight * 0.3,
-                )
+                );
 
                 if (similarDimensions) {
                   // These are repeating components of the same type
@@ -977,17 +1038,17 @@ export async function extractWebsite(
                       (child) => child.textContent?.trim().length > 0 || false,
                     ),
                     sampleHtml: children[0].outerHTML,
-                  })
+                  });
                 }
               }
-            })
+            });
 
             // Detect lists and similar patterns
-            const lists = document.querySelectorAll('ul, ol, dl, [role="list"]')
+            const lists = document.querySelectorAll('ul, ol, dl, [role="list"]');
             lists.forEach((list) => {
               const items = list.querySelectorAll(
                 'li, dt, dd, [role="listitem"]',
-              )
+              );
               if (items.length >= 3) {
                 patterns.push({
                   container: list,
@@ -1002,29 +1063,29 @@ export async function extractWebsite(
                     (item) => item.textContent?.trim().length > 0 || false,
                   ),
                   sampleHtml: items[0].outerHTML,
-                })
+                });
               }
-            })
+            });
 
             // Helper function to generate a reasonably unique selector
             function getUniqueSelector(element: Element): string {
               try {
                 // Start with the tag name
-                let selector = element.tagName.toLowerCase()
+                let selector = element.tagName.toLowerCase();
 
                 // Add id if it exists
                 if (element.id) {
-                  selector += `#${element.id}`
-                  return selector // ID should be unique enough
+                  selector += `#${element.id}`;
+                  return selector; // ID should be unique enough
                 }
 
                 // Add classes
                 if (element.className) {
                   const classes = element.className
                     .split(/\s+/)
-                    .filter((c: string) => c)
+                    .filter((c: string) => c);
                   if (classes.length > 0) {
-                    selector += `.${classes.join('.')}`
+                    selector += `.${classes.join('.')}`;
                   }
                 }
 
@@ -1033,49 +1094,49 @@ export async function extractWebsite(
                   selector === element.tagName.toLowerCase() &&
                   element.parentNode
                 ) {
-                  const siblings = Array.from(element.parentNode.children)
-                  const index = siblings.indexOf(element) + 1
-                  selector += `:nth-child(${index})`
+                  const siblings = Array.from(element.parentNode.children);
+                  const index = siblings.indexOf(element) + 1;
+                  selector += `:nth-child(${index})`;
                 }
 
-                return selector
+                return selector;
               } catch (e) {
-                return element.tagName.toLowerCase()
+                return element.tagName.toLowerCase();
               }
             }
 
-            return patterns
+            return patterns;
           } catch (e) {
-            console.error('Error detecting patterns:', e)
-            return []
+            console.error('Error detecting patterns:', e);
+            return [];
           }
-        }
-      })
-      timer.endStep()
+        };
+      });
+      timer.endStep();
 
       // Go to the page
-      timer.startStep('page_navigation')
-      console.log(`Navigating to ${url}...`)
+      timer.startStep('page_navigation');
+      console.log(`Navigating to ${url}...`);
       await page.goto(url, {
         waitUntil: 'networkidle2', // Wait until network is mostly idle for better style loading
         timeout: 30000,
-      })
-      timer.endStep()
+      });
+      timer.endStep();
 
       // Get the page's base styles for context
-      timer.startStep('get_base_styles')
+      timer.startStep('get_base_styles');
       const baseStyles = await page.evaluate(() => {
-        return window.getBodyStyles()
-      })
-      timer.endStep()
+        return window.getBodyStyles();
+      });
+      timer.endStep();
 
       // NEW: Detect repeated patterns on the page
-      timer.startStep('pattern_detection')
+      timer.startStep('pattern_detection');
       const patterns = await page.evaluate(() => {
-        return window.detectRepeatedPatterns()
-      })
+        return window.detectRepeatedPatterns();
+      });
 
-      console.log(`Detected ${patterns.length} repeated component patterns`)
+      console.log(`Detected ${patterns.length} repeated component patterns`);
 
       // Add dynamic selectors based on detected patterns
       const dynamicSelectors = patterns.map((pattern, index) => ({
@@ -1087,73 +1148,73 @@ export async function extractWebsite(
           containerSelector: pattern.containerSelector,
           childCount: pattern.childCount,
         },
-      }))
-      timer.endStep()
+      }));
+      timer.endStep();
 
       // Extract components
-      timer.startStep('component_extraction')
-      const results: ExtractedComponent[] = []
-      const componentHashes = new Set<string>() // For deduplication
-      const maxComponents = options.maxComponents || 50
-      let componentCount = 0
+      timer.startStep('component_extraction');
+      const results: ExtractedComponent[] = [];
+      const componentHashes = new Set<string>(); // For deduplication
+      const maxComponents = options.maxComponents || 25; // Reduced for serverless
+      let componentCount = 0;
 
       // Filter selectors by requested component types
-      let selectorsList = [...COMPONENT_SELECTORS, ...dynamicSelectors]
+      let selectorsList = [...COMPONENT_SELECTORS, ...dynamicSelectors];
       if (options.componentTypes?.length) {
         selectorsList = selectorsList.filter((item) =>
           options.componentTypes?.includes(item.type),
-        )
+        );
       }
-      selectorsList.sort((a, b) => a.priority - b.priority)
+      selectorsList.sort((a, b) => a.priority - b.priority);
 
       // Metrics collection data
-      const layoutAccuracyResults: number[] = []
-      const styleAccuracyResults: number[] = []
-      const positionAccuracyResults: number[] = []
-      const dimensionAccuracyResults: number[] = []
-      const marginPaddingAccuracyResults: number[] = []
-      const colorAccuracyResults: number[] = []
-      const fontAccuracyResults: number[] = []
-      const contentAccuracyResults: number[] = []
-      const alignmentAccuracyResults: number[] = []
+      const layoutAccuracyResults: number[] = [];
+      const styleAccuracyResults: number[] = [];
+      const positionAccuracyResults: number[] = [];
+      const dimensionAccuracyResults: number[] = [];
+      const marginPaddingAccuracyResults: number[] = [];
+      const colorAccuracyResults: number[] = [];
+      const fontAccuracyResults: number[] = [];
+      const contentAccuracyResults: number[] = [];
+      const alignmentAccuracyResults: number[] = [];
 
       // For each component type
       for (const selectorInfo of selectorsList) {
-        if (componentCount >= maxComponents) break
+        if (componentCount >= maxComponents) break;
 
         // Use type assertion to handle property that might not exist on all union members
-        const { type, selector } = selectorInfo
+        const { type, selector } = selectorInfo;
         const excludeSelector =
           'excludeSelector' in selectorInfo
             ? selectorInfo.excludeSelector
-            : undefined
-        console.log(`Extracting ${type} using selector: ${selector}`)
+            : undefined;
+        console.log(`Extracting ${type} using selector: ${selector}`);
 
         try {
-          timer.startStep(`extract_${type}`)
+          timer.startStep(`extract_${type}`);
           // Update total elements metric
-          totalElementsDetected++
+          totalElementsDetected++;
 
           // Use more advanced selector to avoid duplicates
           const fullSelector = excludeSelector
             ? `${selector}:not(${excludeSelector})`
-            : selector
+            : selector;
 
-          const elementHandles = await page.$$(fullSelector)
+          const elementHandles = await page.$$(fullSelector);
           console.log(
             `Found ${elementHandles.length} elements for type ${type}`,
-          )
+          );
 
           // Update total elements detected metric
-          totalElementsDetected += elementHandles.length
+          totalElementsDetected += elementHandles.length;
 
           // For patterns, limit the number of items to extract (to avoid too many duplicates)
           const isPattern =
             'metadata' in selectorInfo &&
-            selectorInfo.metadata?.patternIndex !== undefined
+            selectorInfo.metadata?.patternIndex !== undefined;
           const maxItemsToExtract = isPattern
-            ? Math.min(10, elementHandles.length) // For patterns, limit to 10 items
-            : elementHandles.length
+            ? Math.min(5, elementHandles.length) // For serverless, limit to 5 items
+            : Math.min(10, elementHandles.length); // For serverless, limit to 10 items
 
           // Process each element to extract the component
           for (
@@ -1161,63 +1222,63 @@ export async function extractWebsite(
             i < maxItemsToExtract && componentCount < maxComponents;
             i++
           ) {
-            timer.startStep(`process_element_${type}_${i}`)
-            const element = elementHandles[i]
+            timer.startStep(`process_element_${type}_${i}`);
+            const element = elementHandles[i];
 
             try {
               // Check if element is visible and has reasonable dimensions
-              const rect = await element.boundingBox().catch(() => null)
+              const rect = await element.boundingBox().catch(() => null);
               if (!rect || rect.width < 20 || rect.height < 20) {
-                failedExtractions++
+                failedExtractions++;
                 metrics.errors?.push({
                   type: 'size_error',
                   message: 'Element too small',
                   count: 1,
-                })
-                timer.endStep()
-                continue // Skip tiny elements
+                });
+                timer.endStep();
+                continue; // Skip tiny elements
               }
 
               // Skip fixed positioned elements (usually overlays)
               const position = await page.evaluate((el) => {
                 try {
-                  return window.getComputedStyle(el).position
+                  return window.getComputedStyle(el).position;
                 } catch (e) {
-                  return ''
+                  return '';
                 }
-              }, element)
+              }, element);
 
               if (position === 'fixed') {
-                failedExtractions++
+                failedExtractions++;
                 metrics.errors?.push({
                   type: 'position_error',
                   message: 'Fixed position element',
                   count: 1,
-                })
-                timer.endStep()
-                continue // Skip fixed positioned elements
+                });
+                timer.endStep();
+                continue; // Skip fixed positioned elements
               }
 
-              // Take a screenshot for reference
-              let screenshot = ''
-              if (!options.skipScreenshots) {
-                timer.startStep(`screenshot_${type}_${i}`)
+              // Take a screenshot for reference - skip in serverless
+              let screenshot = '';
+              if (!options.skipScreenshots && IS_LOCAL) {
+                timer.startStep(`screenshot_${type}_${i}`);
                 try {
                   const screenshotBuffer = await element.screenshot({
                     encoding: 'base64',
                     omitBackground: false, // Include background for better context
-                  })
-                  screenshot = `data:image/png;base64,${screenshotBuffer}`
+                  });
+                  screenshot = `data:image/png;base64,${screenshotBuffer}`;
                 } catch (err) {
-                  console.error('Screenshot failed:', err)
+                  console.error('Screenshot failed:', err);
                   metrics.errors?.push({
                     type: 'screenshot_error',
                     message:
                       err instanceof Error ? err.message : 'Unknown error',
                     count: 1,
-                  })
+                  });
                 }
-                timer.endStep()
+                timer.endStep();
               }
 
               // Extract HTML with comprehensive style preservation
@@ -1226,81 +1287,81 @@ export async function extractWebsite(
                   try {
                     // Function to clone an element with full style context
                     function cloneElementWithStyles(element: Element): {
-                      html: string
-                      externalStyles: string
+                      html: string;
+                      externalStyles: string;
                     } {
                       try {
                         // Safety check
-                        if (!element) return { html: '', externalStyles: '' }
+                        if (!element) return { html: '', externalStyles: '' };
 
                         // Create a wrapper div for context
-                        const wrapper = document.createElement('div')
-                        wrapper.className = `extracted-component ${type}-component`
+                        const wrapper = document.createElement('div');
+                        wrapper.className = `extracted-component ${type}-component`;
 
                         // Set the wrapper's style to prevent stretching
                         wrapper.style.cssText =
-                          'display:inline-block; width:auto; height:auto; position:relative; box-sizing:border-box;'
+                          'display:inline-block; width:auto; height:auto; position:relative; box-sizing:border-box;';
 
                         // Function to recursively process an element and its children
                         function processElement(sourceEl: Element): Node {
                           try {
-                            if (!sourceEl) return document.createTextNode('')
+                            if (!sourceEl) return document.createTextNode('');
 
                             // Clone the element without children first
-                            const clone = sourceEl.cloneNode(false)
+                            const clone = sourceEl.cloneNode(false);
 
                             // Special handling for images to ensure they load
                             if (sourceEl.tagName === 'IMG') {
                               // Make sure src is absolute
-                              const imgEl = sourceEl as HTMLImageElement
-                              const imgClone = clone as HTMLImageElement
+                              const imgEl = sourceEl as HTMLImageElement;
+                              const imgClone = clone as HTMLImageElement;
                               if (imgEl.src) {
-                                imgClone.src = imgEl.src
+                                imgClone.src = imgEl.src;
                                 // Store original dimensions as attributes
                                 if (imgEl.naturalWidth) {
                                   imgClone.setAttribute(
                                     'data-original-width',
                                     imgEl.naturalWidth.toString(),
-                                  )
+                                  );
                                 }
                                 if (imgEl.naturalHeight) {
                                   imgClone.setAttribute(
                                     'data-original-height',
                                     imgEl.naturalHeight.toString(),
-                                  )
+                                  );
                                 }
                               }
                             }
 
                             // Handle background images in style
                             const computedStyle =
-                              window.getComputedStyle(sourceEl)
+                              window.getComputedStyle(sourceEl);
                             const backgroundImage =
-                              computedStyle.backgroundImage
+                              computedStyle.backgroundImage;
 
                             if (backgroundImage && backgroundImage !== 'none') {
                               // Extract URL from background-image
                               const urlMatch = backgroundImage.match(
                                 /url\(['"]?([^'"()]+)['"]?\)/,
-                              )
+                              );
                               if (urlMatch && urlMatch[1]) {
                                 // Store the background image URL as a data attribute
-                                ;(clone as HTMLElement).setAttribute(
+                                (clone as HTMLElement).setAttribute(
                                   'data-background-image',
                                   urlMatch[1],
-                                )
+                                );
                               }
                             }
 
                             // Apply computed styles directly to maintain appearance
                             const styles =
-                              window.getComputedStylesAsInline(sourceEl)
+                              window.getComputedStylesAsInline(sourceEl);
                             if (styles) {
                               if (clone instanceof HTMLElement) {
                                 clone.setAttribute(
                                   'style',
                                   (clone.getAttribute('style') || '') + styles,
-                                )
+                                );
                               }
                             }
 
@@ -1311,22 +1372,22 @@ export async function extractWebsite(
                                 (clone.style.position === 'fixed' ||
                                   clone.style.position === 'absolute')
                               ) {
-                                clone.style.position = 'relative'
-                                clone.style.top = '0'
-                                clone.style.left = '0'
+                                clone.style.position = 'relative';
+                                clone.style.top = '0';
+                                clone.style.left = '0';
                               }
                             }
 
                             // If this is the root element we're cloning, set explicit size constraints
                             if (sourceEl === element) {
                               try {
-                                const rect = sourceEl.getBoundingClientRect()
+                                const rect = sourceEl.getBoundingClientRect();
                                 if (rect) {
                                   if (clone instanceof HTMLElement) {
-                                    clone.style.width = rect.width + 'px'
-                                    clone.style.height = rect.height + 'px'
-                                    clone.style.flexGrow = '0'
-                                    clone.style.flexShrink = '0'
+                                    clone.style.width = rect.width + 'px';
+                                    clone.style.height = rect.height + 'px';
+                                    clone.style.flexGrow = '0';
+                                    clone.style.flexShrink = '0';
                                   }
                                 }
                               } catch (e) {
@@ -1341,20 +1402,20 @@ export async function extractWebsite(
                                 i < sourceEl.childNodes.length;
                                 i++
                               ) {
-                                const child = sourceEl.childNodes[i]
+                                const child = sourceEl.childNodes[i];
                                 try {
                                   if (child.nodeType === Node.ELEMENT_NODE) {
                                     const processed = processElement(
                                       child as Element,
-                                    )
+                                    );
                                     if (processed) {
-                                      clone.appendChild(processed)
+                                      clone.appendChild(processed);
                                     }
                                   } else if (
                                     child.nodeType === Node.TEXT_NODE
                                   ) {
                                     // Copy text nodes directly
-                                    clone.appendChild(child.cloneNode(true))
+                                    clone.appendChild(child.cloneNode(true));
                                   }
                                 } catch (childErr) {
                                   // Skip problematic children
@@ -1362,10 +1423,10 @@ export async function extractWebsite(
                               }
                             }
 
-                            return clone
+                            return clone;
                           } catch (err) {
-                            console.error('Process element error:', err)
-                            return document.createTextNode('')
+                            console.error('Process element error:', err);
+                            return document.createTextNode('');
                           }
                         }
 
@@ -1377,95 +1438,95 @@ export async function extractWebsite(
                           background-position: center !important;
                           background-repeat: no-repeat !important;
                         }
-                      `
+                      `;
 
                         // Start recursive processing from the target element
                         try {
-                          const processed = processElement(element)
+                          const processed = processElement(element);
                           if (processed) {
-                            wrapper.appendChild(processed)
+                            wrapper.appendChild(processed);
                           }
 
                           // Add a style tag for handling background images
-                          const styleTag = document.createElement('style')
-                          styleTag.textContent = extraCSS
-                          wrapper.appendChild(styleTag)
+                          const styleTag = document.createElement('style');
+                          styleTag.textContent = extraCSS;
+                          wrapper.appendChild(styleTag);
                         } catch (e) {
-                          console.error('Error appending processed element:', e)
+                          console.error('Error appending processed element:', e);
                         }
 
                         // Extract any relevant external CSS
-                        let externalStyles = ''
+                        let externalStyles = '';
                         try {
                           externalStyles =
-                            window.getExternalStylesForElement(element)
+                            window.getExternalStylesForElement(element);
                         } catch (e) {
-                          console.error('Error getting external styles:', e)
+                          console.error('Error getting external styles:', e);
                         }
 
                         // Add a style tag if we found external styles
                         if (externalStyles) {
                           try {
-                            const styleTag = document.createElement('style')
-                            styleTag.textContent = externalStyles
-                            wrapper.appendChild(styleTag)
+                            const styleTag = document.createElement('style');
+                            styleTag.textContent = externalStyles;
+                            wrapper.appendChild(styleTag);
                           } catch (e) {
-                            console.error('Error appending style tag:', e)
+                            console.error('Error appending style tag:', e);
                           }
                         }
 
                         return {
                           html: wrapper.outerHTML || '',
                           externalStyles: externalStyles || '',
-                        }
+                        };
                       } catch (e) {
-                        console.error('Clone element error:', e)
-                        return { html: '', externalStyles: '' }
+                        console.error('Clone element error:', e);
+                        return { html: '', externalStyles: '' };
                       }
                     }
 
                     // Execute the cloning process with safety wrapping
-                    return cloneElementWithStyles(el)
+                    return cloneElementWithStyles(el);
                   } catch (e) {
-                    console.error('Page evaluate error:', e)
-                    return { html: '', externalStyles: '' }
+                    console.error('Page evaluate error:', e);
+                    return { html: '', externalStyles: '' };
                   }
                 },
                 element,
                 type,
-              )
+              );
 
               // Safely extract values from the result
-              const htmlWithStyles = result && result.html ? result.html : ''
+              const htmlWithStyles = result && result.html ? result.html : '';
               const externalStyles =
-                result && result.externalStyles ? result.externalStyles : ''
+                result && result.externalStyles ? result.externalStyles : '';
 
               // Skip if no content was extracted
               if (!htmlWithStyles) {
-                failedExtractions++
+                failedExtractions++;
                 metrics.errors?.push({
                   type: 'extraction_error',
                   message: 'No HTML content extracted',
                   count: 1,
-                })
-                timer.endStep()
-                continue
+                });
+                timer.endStep();
+                continue;
               }
 
               // Get text content for naming
               const textContent = await page.evaluate((el) => {
                 try {
-                  const text = el.textContent ? el.textContent.trim() : ''
-                  return text.length > 25 ? text.slice(0, 25) + '...' : text
+                  const text = el.textContent ? el.textContent.trim() : '';
+                  return text.length > 25 ? text.slice(0, 25) + '...' : text;
                 } catch (e) {
-                  return ''
+                  return '';
                 }
-              }, element)
+              }, element);
 
               // Get element metadata
               const metadata = await page.evaluate((el) => {
                 try {
-                  const rect = el.getBoundingClientRect()
+                  const rect = el.getBoundingClientRect();
                   return {
                     tagName: el.tagName ? el.tagName.toLowerCase() : '',
                     classes: el.classList ? Array.from(el.classList) : [],
@@ -1490,11 +1551,11 @@ export async function extractWebsite(
                       el.tagName === 'A' && 'href' in el
                         ? (el as HTMLAnchorElement).href
                         : el.querySelector('a')
-                          ? (el.querySelector('a') as HTMLAnchorElement).href
-                          : '',
+                        ? (el.querySelector('a') as HTMLAnchorElement).href
+                        : '',
                     // If this is part of a pattern
                     isRepeatedPattern: false,
-                  }
+                  };
                 } catch (e) {
                   return {
                     tagName: '',
@@ -1510,33 +1571,33 @@ export async function extractWebsite(
                     hasImage: false,
                     link: '',
                     isRepeatedPattern: false,
-                  }
+                  };
                 }
-              }, element)
+              }, element);
 
               // Enhance component type based on metadata
-              let enhancedType = type
+              let enhancedType = type;
               if (metadata.hasImage && metadata.link) {
                 if (type === 'card-item' || type === 'item-card') {
-                  enhancedType = 'product-card'
+                  enhancedType = 'product-card';
                 } else if (type === 'grid-items') {
-                  enhancedType = 'gallery-item'
+                  enhancedType = 'gallery-item';
                 }
               }
 
               // Create a descriptive name
               const displayName = textContent
                 ? `${enhancedType.charAt(0).toUpperCase() + enhancedType.slice(1)}: ${textContent}`
-                : `${enhancedType.charAt(0).toUpperCase() + enhancedType.slice(1)} Component`
+                : `${enhancedType.charAt(0).toUpperCase() + enhancedType.slice(1)} Component`;
 
               // Extract essential styles and context information
               const styles = await page.evaluate((el) => {
                 try {
-                  const computed = window.getComputedStyle(el)
-                  const result: Record<string, string> = {}
+                  const computed = window.getComputedStyle(el);
+                  const result: Record<string, string> = {};
 
                   // Extract key style properties
-                  ;[
+                  [
                     'backgroundColor',
                     'color',
                     'fontSize',
@@ -1559,17 +1620,17 @@ export async function extractWebsite(
                   ].forEach((prop) => {
                     try {
                       // Safe indexing with string key
-                      result[prop] = computed[prop as any] as string
+                      result[prop] = computed[prop as any] as string;
                     } catch (e) {
                       // Skip problematic properties
                     }
-                  })
+                  });
 
-                  return result
+                  return result;
                 } catch (e) {
-                  return {}
+                  return {};
                 }
-              }, element)
+              }, element);
 
               // Create complete component with context info
               const component: ExtractedComponent = {
@@ -1592,13 +1653,13 @@ export async function extractWebsite(
                   sourcePage: url,
                   extractedAt: new Date().toISOString(),
                 },
-              }
+              };
 
               // Extract the original element's metrics for comparison
               const originalMetrics = await page.evaluate((el) => {
                 try {
-                  const rect = el.getBoundingClientRect()
-                  const computed = window.getComputedStyle(el)
+                  const rect = el.getBoundingClientRect();
+                  const computed = window.getComputedStyle(el);
 
                   return {
                     position: {
@@ -1629,12 +1690,12 @@ export async function extractWebsite(
                       justifyContent: computed.justifyContent,
                       alignItems: computed.alignItems,
                     },
-                  }
+                  };
                 } catch (e) {
-                  console.error('Error getting original metrics:', e)
-                  return null
+                  console.error('Error getting original metrics:', e);
+                  return null;
                 }
-              }, element)
+              }, element);
 
               // Extract the processed element's metrics for comparison
               const extractedMetrics = {
@@ -1660,7 +1721,7 @@ export async function extractWebsite(
                   justifyContent: styles.justifyContent || '',
                   alignItems: styles.alignItems || '',
                 },
-              }
+              };
 
               // Calculate individual metric accuracies
               const positionAccuracy = originalMetrics
@@ -1668,21 +1729,21 @@ export async function extractWebsite(
                     originalMetrics.position,
                     extractedMetrics.position,
                   )
-                : 95
+                : 95;
 
               const dimensionAccuracy = originalMetrics
                 ? calculateDimensionAccuracy(
                     originalMetrics.dimensions,
                     extractedMetrics.dimensions,
                   )
-                : 95
+                : 95;
 
               const marginPaddingAccuracy = originalMetrics
                 ? calculateSpacingAccuracy(
                     originalMetrics.spacing,
                     extractedMetrics.spacing,
                   )
-                : 95
+                : 95;
 
               const colorAccuracy =
                 originalMetrics && originalMetrics.colors.backgroundColor
@@ -1690,21 +1751,22 @@ export async function extractWebsite(
                       originalMetrics.colors.backgroundColor,
                       extractedMetrics.colors.backgroundColor,
                     )
-                  : 97
+                  : 97;
 
               const fontAccuracy = originalMetrics
                 ? calculateTypographyAccuracy(
                     originalMetrics.typography,
                     extractedMetrics.typography,
                   )
-                : 95
+                : 95;
 
-              const display = originalMetrics.alignment.display
+              // Calculate alignment accuracy only if the display property is flex or grid
+              const display = originalMetrics?.alignment?.display;
               const isFlexOrGrid =
                 display === 'flex' ||
                 display === 'inline-flex' ||
                 display === 'grid' ||
-                display === 'inline-grid'
+                display === 'inline-grid';
 
               // only compute & record alignmentAccuracy for true flex/grid elements
               const alignmentAccuracy = isFlexOrGrid
@@ -1712,10 +1774,10 @@ export async function extractWebsite(
                     originalMetrics.alignment,
                     extractedMetrics.alignment,
                   )
-                : NaN
+                : NaN;
 
               if (!isNaN(alignmentAccuracy)) {
-                alignmentAccuracyResults.push(alignmentAccuracy)
+                alignmentAccuracyResults.push(alignmentAccuracy);
               }
 
               // Calculate composite metrics
@@ -1723,38 +1785,38 @@ export async function extractWebsite(
                 positionAccuracy,
                 dimensionAccuracy,
                 marginPaddingAccuracy,
-                alignmentAccuracy,
-              )
+                isFlexOrGrid ? alignmentAccuracy : null,
+              );
 
               const styleAccuracy = calculateOverallStyleAccuracy(
                 colorAccuracy,
                 fontAccuracy,
-              )
+              );
 
               // Content accuracy (simplified implementation)
-              const contentAccuracy = 95 // In a full implementation, you would analyze text and image content
+              const contentAccuracy = 95; // In a full implementation, you would analyze text and image content
 
               // Add all calculated metrics to their respective arrays for later averaging
-              positionAccuracyResults.push(positionAccuracy)
-              dimensionAccuracyResults.push(dimensionAccuracy)
-              marginPaddingAccuracyResults.push(marginPaddingAccuracy)
-              colorAccuracyResults.push(colorAccuracy)
-              fontAccuracyResults.push(fontAccuracy)
-              layoutAccuracyResults.push(layoutAccuracy)
-              styleAccuracyResults.push(styleAccuracy)
-              contentAccuracyResults.push(contentAccuracy)
+              positionAccuracyResults.push(positionAccuracy);
+              dimensionAccuracyResults.push(dimensionAccuracy);
+              marginPaddingAccuracyResults.push(marginPaddingAccuracy);
+              colorAccuracyResults.push(colorAccuracy);
+              fontAccuracyResults.push(fontAccuracy);
+              layoutAccuracyResults.push(layoutAccuracy);
+              styleAccuracyResults.push(styleAccuracy);
+              contentAccuracyResults.push(contentAccuracy);
 
               // Check for duplicates using enhanced hashing
-              const hash = generateComponentHash(component)
+              const hash = generateComponentHash(component);
               if (!componentHashes.has(hash)) {
-                componentHashes.add(hash)
-                results.push(component)
-                componentCount++
-                componentsExtracted++
+                componentHashes.add(hash);
+                results.push(component);
+                componentCount++;
+                componentsExtracted++;
               }
             } catch (elementError) {
-              console.error(`Error processing element: ${elementError}`)
-              failedExtractions++
+              console.error(`Error processing element: ${elementError}`);
+              failedExtractions++;
               metrics.errors?.push({
                 type: 'element_processing_error',
                 message:
@@ -1762,17 +1824,17 @@ export async function extractWebsite(
                     ? elementError.message
                     : 'Unknown error',
                 count: 1,
-              })
+              });
               // Continue to the next element
             }
 
             // Dispose element handle to prevent memory leaks
-            await element.dispose().catch(() => {})
-            timer.endStep()
+            await element.dispose().catch(() => {});
+            timer.endStep();
           }
         } catch (selectorError) {
-          console.error(`Error with selector ${selector}: ${selectorError}`)
-          failedExtractions++
+          console.error(`Error with selector ${selector}: ${selectorError}`);
+          failedExtractions++;
           metrics.errors?.push({
             type: 'selector_error',
             message:
@@ -1780,84 +1842,83 @@ export async function extractWebsite(
                 ? selectorError.message
                 : 'Unknown error',
             count: 1,
-          })
+          });
           // Continue to the next selector type
         }
-        timer.endStep()
+        timer.endStep();
       }
-      timer.endStep()
+      timer.endStep();
 
       // Clear the timeout since we've finished
-      clearTimeout(extractionTimeout)
+      clearTimeout(extractionTimeout);
 
       // Sort components by type for better organization
       results.sort((a, b) => {
         // First by type
-        if (a.type !== b.type) return a.type.localeCompare(b.type)
+        if (a.type !== b.type) return a.type.localeCompare(b.type);
         // Then by name
-        return a.name.localeCompare(b.name)
-      })
+        return a.name.localeCompare(b.name);
+      });
 
-      console.log(`Extraction complete. Found ${results.length} components`)
+      console.log(`Extraction complete. Found ${results.length} components`);
 
       // Calculate final metrics
-      const endTime = Date.now()
-      const extractionTimeMs = endTime - startTime
+      const endTime = Date.now();
+      const extractionTimeMs = endTime - startTime;
 
       // Calculate average accuracy values
       const avgPositionAccuracy = positionAccuracyResults.length
         ? positionAccuracyResults.reduce((sum, val) => sum + val, 0) /
           positionAccuracyResults.length
-        : 0
+        : 0;
 
       const avgDimensionAccuracy = dimensionAccuracyResults.length
         ? dimensionAccuracyResults.reduce((sum, val) => sum + val, 0) /
           dimensionAccuracyResults.length
-        : 0
+        : 0;
 
       const avgMarginPaddingAccuracy = marginPaddingAccuracyResults.length
         ? marginPaddingAccuracyResults.reduce((sum, val) => sum + val, 0) /
           marginPaddingAccuracyResults.length
-        : 0
+        : 0;
 
       const avgColorAccuracy = colorAccuracyResults.length
         ? colorAccuracyResults.reduce((sum, val) => sum + val, 0) /
           colorAccuracyResults.length
-        : 0
+        : 0;
 
       const avgFontAccuracy = fontAccuracyResults.length
         ? fontAccuracyResults.reduce((sum, val) => sum + val, 0) /
           fontAccuracyResults.length
-        : 0
+        : 0;
 
       const avgLayoutAccuracy = layoutAccuracyResults.length
         ? layoutAccuracyResults.reduce((sum, val) => sum + val, 0) /
           layoutAccuracyResults.length
-        : 0
+        : 0;
 
       const avgStyleAccuracy = styleAccuracyResults.length
         ? styleAccuracyResults.reduce((sum, val) => sum + val, 0) /
           styleAccuracyResults.length
-        : 0
+        : 0;
 
       const avgContentAccuracy = contentAccuracyResults.length
         ? contentAccuracyResults.reduce((sum, val) => sum + val, 0) /
           contentAccuracyResults.length
-        : 0
+        : 0;
 
       const avgAlignmentAccuracy =
         alignmentAccuracyResults.length > 0
           ? alignmentAccuracyResults.reduce((a, b) => a + b, 0) /
             alignmentAccuracyResults.length
-          : null
+          : null;
 
       // Calculate overall accuracy as weighted average of all metrics
       const overallAccuracy =
         avgLayoutAccuracy * 0.4 +
         avgStyleAccuracy * 0.4 +
-        avgContentAccuracy * 0.2
+        avgContentAccuracy * 0.2;
 
-      // Populate the final metrics object
       // Populate the final metrics object
       const finalMetrics: ExtractionMetrics = {
         extractionTimeMs,
@@ -1882,26 +1943,26 @@ export async function extractWebsite(
         errors: metrics.errors || [],
         url,
         timestamp: new Date().toISOString(),
-      }
+      };
 
       // Store in cache
       componentCache.set(cacheKey, {
         timestamp: Date.now(),
         components: results,
         metrics: finalMetrics,
-      })
+      });
 
       return {
         components: results,
         metrics: finalMetrics,
         timingData: timer.getTimingData(),
-      }
+      };
     } catch (error) {
-      clearTimeout(extractionTimeout)
-      throw error
+      clearTimeout(extractionTimeout);
+      throw error;
     }
   } catch (error) {
-    console.error('Extraction error:', error)
+    console.error('Extraction error:', error);
 
     // Generate error metrics
     const errorMetrics: ExtractionMetrics = {
@@ -1932,20 +1993,20 @@ export async function extractWebsite(
       ],
       url,
       timestamp: new Date().toISOString(),
-    }
+    };
 
     throw new Error(
       `Failed to extract UI components: ${
         error instanceof Error ? error.message : 'Unknown error'
       }`,
-    )
+    );
   } finally {
     // Always close the browser
     if (browser) {
       try {
-        await browser.close()
+        await browser.close();
       } catch (error) {
-        console.error('Error closing browser:', error)
+        console.error('Error closing browser:', error);
       }
     }
   }

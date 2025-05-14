@@ -5,6 +5,7 @@ import { useFetcher, Link, useNavigate, useLoaderData } from '@remix-run/react'
 import { SearchResultsBar } from '@/components/SearchResultsBar'
 import ExtractionLoadingScreen from './loadingscreen'
 import { MetricsPanel, type ExtractionMetrics } from '~/components/MetricsPanel'
+import { MockDataNotification } from '~/components/MockDataNotification';
 
 // Shadcn UI components
 import { Button } from '~/components/ui/button'
@@ -205,6 +206,7 @@ export default function ExtractPage() {
   const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [manualDebug, setManualDebug] = useState<string>('')
+  const [isMockData, setIsMockData] = useState<boolean>(false);
   const [selectedComponent, setSelectedComponent] = useState<string | null>(
     null,
   )
@@ -541,6 +543,12 @@ export default function ExtractPage() {
           console.warn('Failed to store metrics in localStorage:', e)
         }
         // END OF ADDED BLOCK
+      }
+
+      if (fetcher.data.isMockData) {
+        setIsMockData(true);
+      } else {
+        setIsMockData(false);
       }
 
       if (typeof window !== 'undefined') {
@@ -1015,6 +1023,7 @@ export default function ExtractPage() {
                     }
                     searchQuery={url}
                   />
+                  <MockDataNotification isVisible={isMockData} />
                   {extractionMetrics && (
                     <MetricsPanel
                       metrics={extractionMetrics}
