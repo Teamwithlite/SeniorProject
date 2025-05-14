@@ -1,5 +1,8 @@
 {
     "version": 2,
+    "buildCommand": "node vercel-build.js && remix vite:build",
+    "installCommand": "npm install",
+    "framework": "remix",
     "functions": {
       "build/server/index.js": {
         "memory": 1024,
@@ -31,6 +34,7 @@
       }
     ],
     "env": {
-      "VERCEL_SERVERLESS": "1"
+      "VERCEL_SERVERLESS": "1",
+      "NODE_VERSION": "20.x"
     }
   }
