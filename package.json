@@ -48,6 +48,7 @@
   },
   "devDependencies": {
     "@remix-run/dev": "^2.9.2",
+    "@vercel/remix": "^2.9.2",
     "@remix-run/eslint-config": "^2.9.2",
     "@sparticuz/chromium": "^133.0.0",
     "@types/lodash": "^4.17.16",
