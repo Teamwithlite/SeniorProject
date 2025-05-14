@@ -1,14 +1,13 @@
-// vite.config.ts
-import { vitePlugin as remix } from '@remix-run/dev';
-import { defineConfig } from 'vite';
-import path from 'path';
-import tsconfigPaths from 'vite-tsconfig-paths';
+import { defineConfig } from "vite";
+import { vitePlugin as remix } from "@remix-run/dev";
+import tsconfigPaths from "vite-tsconfig-paths";
+import path from "path";
 
 export default defineConfig({
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './app'), // Alias for @
-      '~': path.resolve(__dirname, './app')  // Alias for ~
+      "@": path.resolve(__dirname, "./app"),
+      "~": path.resolve(__dirname, "./app")
     }
   },
   plugins: [
@@ -18,7 +17,12 @@ export default defineConfig({
         v3_relativeSplatPath: true,
         v3_throwAbortReason: true,
       },
+      serverModuleFormat: "esm"
     }),
-    tsconfigPaths(), // Keeps path resolution aligned with tsconfig.json
+    tsconfigPaths(),
   ],
+  server: {
+    port: 3000,
+    host: "0.0.0.0"
+  }
 });

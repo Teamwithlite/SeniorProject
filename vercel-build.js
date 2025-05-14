@@ -1,6 +1,10 @@
 // vercel-build.js
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Write a warning file that will be included in the build
 const writeVercelWarning = () => {
@@ -31,52 +35,25 @@ console.log('Running in Vercel environment with extraction limitations');
     console.log('Created Vercel configuration file at:', outputPath);
   } catch (error) {
     console.error('Warning: Could not create Vercel config file:', error);
-    // Continue instead of failing, this is not critical
   }
 };
 
-// Check dependencies but don't fail the build
-const checkDependencies = () => {
-  const requiredDeps = [
-    '@sparticuz/chromium',
-    'puppeteer-core'
-  ];
-
-  const missingDeps = [];
-  
-  for (const dep of requiredDeps) {
-    try {
-      require.resolve(dep);
-    } catch (e) {
-      missingDeps.push(dep);
-    }
-  }
-
-  if (missingDeps.length > 0) {
-    console.warn('Warning: Missing dependencies:', missingDeps.join(', '));
-    console.warn('Continuing build with mock data fallback');
-    // Don't exit - we'll use mock data instead
-  }
-};
-
-// Main function
+// Like the Reddit thread suggested, make your code robust with better error handling
 const main = () => {
   console.log('Running Vercel build preparation script...');
   
-  // Only perform these actions if we're in a Vercel environment
-  if (process.env.VERCEL === '1') {
-    console.log('Vercel environment detected');
-    
-    try {
-      checkDependencies();
+  try {
+    if (process.env.VERCEL === '1') {
+      console.log('Vercel environment detected');
       writeVercelWarning();
-      console.log('Vercel build preparation completed successfully');
-    } catch (error) {
-      console.error('Warning during Vercel build preparation:', error);
-      // Don't fail the build, continue anyway
+      console.log('✅ Vercel build preparation completed successfully');
+    } else {
+      console.log('Not running in Vercel environment, skipping preparation');
     }
-  } else {
-    console.log('Not running in Vercel environment, skipping preparation');
+  } catch (error) {
+    // Instead of failing, log the error and continue
+    console.error('⚠️ Warning during build preparation:', error.message);
+    console.log('Continuing build process despite errors...');
   }
 };
 
