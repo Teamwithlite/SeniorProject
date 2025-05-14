@@ -1,7 +1,10 @@
 // app/services/extractor.ts
 import puppeteer from 'puppeteer'
 import type { ExtractionMetrics } from '~/components/MetricsPanel'
-import chromium from '@sparticuz/chromium'
+let chromium: any
+if (process.env.NODE_ENV === 'production') {
+  chromium = await import('@sparticuz/chromium').catch(() => null)
+}
 /**
  * Clean HTML while preserving necessary styles and structure
  */
